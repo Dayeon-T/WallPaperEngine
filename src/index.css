@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --font-pretendard: "Pretendard Variable", "Pretendard", sans-serif;
+  --font-ubuntu: "Ubuntu", sans-serif;
+
+  --color-bg: #eee;
+  --color-widjet: #fff;
+  --color-text:#2b2b2b;
+  --color-muted:#979797;
+  --color-btn:#F9F9F9;
+  --color-primary:#4A4A4A;
+
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--color-bg);
+}
+
+:root {
+  font-family: var(--font-pretendard);
+}
