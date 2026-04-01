@@ -8,7 +8,14 @@ export default function Timer() {
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
-        setSeconds((prev) => prev + 1)
+        setSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(intervalRef.current)
+            setRunning(false)
+            return 0
+          }
+          return prev - 1
+        })
       }, 1000)
     } else {
       clearInterval(intervalRef.current)
@@ -18,7 +25,10 @@ export default function Timer() {
 
   const addFive = () => setSeconds((prev) => prev + 300)
   const reset = () => { setRunning(false); setSeconds(0) }
-  const toggle = () => setRunning((prev) => !prev)
+  const toggle = () => {
+    if (!running && seconds === 0) return
+    setRunning((prev) => !prev)
+  }
 
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0")
   const ss = String(seconds % 60).padStart(2, "0")

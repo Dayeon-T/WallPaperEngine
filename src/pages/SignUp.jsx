@@ -41,14 +41,14 @@ export default function SignUp() {
 
     setLoading(true)
 
-    const { error } = await signUp(form.email, form.password, {
+    const { error, errorMessage } = await signUp(form.email, form.password, {
       name: form.name,
       school: form.school,
       subject: form.subject,
     })
 
     if (error) {
-      setError("회원가입에 실패했습니다. 다시 시도해주세요.")
+      setError(errorMessage)
       setLoading(false)
       return
     }
