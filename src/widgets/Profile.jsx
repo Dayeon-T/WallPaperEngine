@@ -16,9 +16,9 @@ export default function Profile() {
   return (
     <div className="bg-widjet rounded-2xl pt-7">
       <div className="flex flex-col gap-2 mx-7">
-        <p className="text-lg font-semibold">안녕하세요,</p>
-        <p className="text-4xl font-extrabold">{name} 선생님</p>
-        <p className="text-sm text-muted mb-4">{user?.email}</p>
+        <p className="text-[clamp(0.8rem,0.9vw,1.125rem)] font-semibold">안녕하세요,</p>
+        <p className="text-[clamp(1.2rem,2vw,2.25rem)] font-extrabold">{name} 선생님</p>
+        <p className="text-[clamp(0.6rem,0.7vw,0.875rem)] text-muted mb-4">{user?.email}</p>
         
 
         </div>
