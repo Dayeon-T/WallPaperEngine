@@ -39,13 +39,13 @@ export default function Timer() {
       <div className="mt-2 flex gap-[0.4vw]">
         <button
           onClick={addFive}
-          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-btn text-[clamp(0.5rem,0.7vw,0.75rem)] font-bold text-muted transition hover:text-text"
+          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-primary text-[clamp(0.5rem,0.7vw,0.75rem)] font-bold text-white transition hover:opacity-80"
         >
           +5
         </button>
         <button
           onClick={reset}
-          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-btn text-muted transition hover:text-text"
+          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-primary text-white transition hover:opacity-80"
         >
           <svg className="h-[clamp(0.7rem,1vw,1rem)] w-[clamp(0.7rem,1vw,1rem)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M1 4v6h6" />
@@ -54,7 +54,7 @@ export default function Timer() {
         </button>
         <button
           onClick={toggle}
-          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-btn text-muted transition hover:text-text"
+          className="flex h-[clamp(1.5rem,2.2vw,2.25rem)] w-[clamp(1.5rem,2.2vw,2.25rem)] items-center justify-center rounded-full bg-primary text-white transition hover:opacity-80"
         >
           {running ? (
             <svg className="h-[clamp(0.7rem,1vw,1rem)] w-[clamp(0.7rem,1vw,1rem)]" viewBox="0 0 24 24" fill="currentColor">
