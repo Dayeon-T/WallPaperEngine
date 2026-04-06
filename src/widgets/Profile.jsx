@@ -12,8 +12,6 @@ const DEFAULT_LINKS = [
 export default function Profile() {
   const { user } = useAuth()
   const [links, setLinks] = useState(DEFAULT_LINKS)
-  const [hasNewUpdate, setHasNewUpdate] = useState(false)
-
   useEffect(() => {
     if (!user) return
     ;(async () => {
@@ -22,9 +20,6 @@ export default function Profile() {
         setLinks(data.quick_links)
       }
     })()
-    const latest = localStorage.getItem("changelog_latest")
-    const lastRead = localStorage.getItem("changelog_last_read")
-    if (latest && latest !== lastRead) setHasNewUpdate(true)
   }, [user])
 
   const handleSignOut = async () => {
@@ -69,11 +64,8 @@ export default function Profile() {
             </li>
           ))}
           <li>
-            <a href="/settings" className="relative inline-block">
+            <a href="/settings">
               <span>설정</span>
-              {hasNewUpdate && (
-                <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-red-500" />
-              )}
             </a>
           </li>
         </ul>

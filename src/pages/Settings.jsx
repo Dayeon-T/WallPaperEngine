@@ -89,29 +89,11 @@ export default function Settings() {
   const { user } = useAuth()
   const [activeSection, setActiveSection] = useState("profile")
   const [msg, setMsg] = useState({ text: "", type: "" })
-  const [hasNewUpdate, setHasNewUpdate] = useState(() => {
-    const lastRead = localStorage.getItem("changelog_last_read")
-    const latest = CHANGELOGS[0]?.date
-    return latest && lastRead !== latest
-  })
-
   const showMsg = (text, type = "success") => {
     setMsg({ text, type })
     setTimeout(() => setMsg({ text: "", type: "" }), 3000)
   }
 
-  useEffect(() => {
-    const latest = CHANGELOGS[0]?.date
-    if (latest) localStorage.setItem("changelog_latest", latest)
-  }, [])
-
-  const handleSectionClick = (id) => {
-    setActiveSection(id)
-    if (id === "changelog" && hasNewUpdate) {
-      localStorage.setItem("changelog_last_read", CHANGELOGS[0]?.date)
-      setHasNewUpdate(false)
-    }
-  }
 
   if (!user) return null
 
@@ -124,7 +106,7 @@ export default function Settings() {
         {SECTIONS.map((s) => (
           <button
             key={s.id}
-            onClick={() => handleSectionClick(s.id)}
+            onClick={() => setActiveSection(s.id)}
             className={`text-left px-4 py-2.5 rounded-lg text-sm transition ${
               activeSection === s.id
                 ? "bg-primary/10 text-primary font-semibold"
