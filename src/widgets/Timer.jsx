@@ -3,7 +3,10 @@ import { useState, useEffect, useRef } from "react"
 export default function Timer() {
   const [seconds, setSeconds] = useState(0)
   const [running, setRunning] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [editValue, setEditValue] = useState("")
   const intervalRef = useRef(null)
+  const editRef = useRef(null)
 
   useEffect(() => {
     if (running) {
@@ -23,19 +26,84 @@ export default function Timer() {
     return () => clearInterval(intervalRef.current)
   }, [running])
 
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus()
+      editRef.current.select()
+    }
+  }, [editing])
+
   const addFive = () => setSeconds((prev) => prev + 300)
-  const reset = () => { setRunning(false); setSeconds(0) }
+  const reset = () => { setRunning(false); setSeconds(0); setEditing(null) }
   const toggle = () => {
     if (!running && seconds === 0) return
     setRunning((prev) => !prev)
   }
 
-  const mm = String(Math.floor(seconds / 60)).padStart(2, "0")
-  const ss = String(seconds % 60).padStart(2, "0")
+  const mm = Math.floor(seconds / 60)
+  const ss = seconds % 60
+
+  const startEdit = (field) => {
+    if (running) return
+    setEditing(field)
+    setEditValue(String(field === "mm" ? mm : ss).padStart(2, "0"))
+  }
+
+  const commitEdit = () => {
+    const val = Math.max(0, parseInt(editValue, 10) || 0)
+    if (editing === "mm") {
+      setSeconds(val * 60 + ss)
+    } else {
+      setSeconds(mm * 60 + Math.min(val, 59))
+    }
+    setEditing(null)
+  }
+
+  const handleEditKeyDown = (e) => {
+    if (e.key === "Enter") commitEdit()
+    if (e.key === "Escape") setEditing(null)
+  }
+
+  const digitStyle = "text-[clamp(1.2rem,2.2vw,2.25rem)] font-extrabold font-ubuntu cursor-pointer hover:opacity-70 transition-opacity"
 
   return (
-    <div className="flex h-full flex-col items-end justify-start rounded-2xl  p-4">
-      <p className="text-[clamp(1.2rem,2.2vw,2.25rem)] font-extrabold font-ubuntu">{mm} : {ss}</p>
+    <div className="flex h-full flex-col items-end justify-start rounded-2xl p-4">
+      <div className="flex items-baseline">
+        {editing === "mm" ? (
+          <input
+            ref={editRef}
+            type="number"
+            min="0"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleEditKeyDown}
+            className="w-[2.5em] text-[clamp(1.2rem,2.2vw,2.25rem)] font-extrabold font-ubuntu text-right bg-transparent border-b-2 border-primary outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+          />
+        ) : (
+          <span className={digitStyle} onClick={() => startEdit("mm")}>
+            {String(mm).padStart(2, "0")}
+          </span>
+        )}
+        <span className="text-[clamp(1.2rem,2.2vw,2.25rem)] font-extrabold font-ubuntu mx-1"> : </span>
+        {editing === "ss" ? (
+          <input
+            ref={editRef}
+            type="number"
+            min="0"
+            max="59"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleEditKeyDown}
+            className="w-[2.5em] text-[clamp(1.2rem,2.2vw,2.25rem)] font-extrabold font-ubuntu bg-transparent border-b-2 border-primary outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+          />
+        ) : (
+          <span className={digitStyle} onClick={() => startEdit("ss")}>
+            {String(ss).padStart(2, "0")}
+          </span>
+        )}
+      </div>
       <div className="mt-2 flex gap-[0.4vw]">
         <button
           onClick={addFive}

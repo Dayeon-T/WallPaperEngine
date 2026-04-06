@@ -12,6 +12,8 @@ import ToDo from "../widgets/ToDo"
 import SchoolMeals from "../widgets/SchoolMeals"
 import Schedule from "../widgets/Schedule"
 import BirthdayOverlay from "../widgets/Components/BirthdayOverlay"
+import CheerToast from "../widgets/Components/CheerToast"
+import CheerButton from "../widgets/CheerButton"
 import Folders from "../widgets/Folders"
 
 function getDDayDiff(targetDate) {
@@ -93,6 +95,21 @@ function isBirthdayToday(user) {
 export default function GridLayout() {
   const { user, loading } = useAuth()
   const [showBirthday, setShowBirthday] = useState(false)
+  const [layoutMode, setLayoutMode] = useState("horizontal")
+
+  useEffect(() => {
+    if (!user) return
+    ;(async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.layout_mode) setLayoutMode(data.layout_mode)
+    })()
+  }, [user])
+
+  useEffect(() => {
+    const handler = (e) => setLayoutMode(e.detail)
+    window.addEventListener("layout-change", handler)
+    return () => window.removeEventListener("layout-change", handler)
+  }, [])
 
   useEffect(() => {
     if (!user || !isBirthdayToday(user)) return
@@ -102,9 +119,55 @@ export default function GridLayout() {
     setShowBirthday(true)
   }, [user])
 
+  const isVertical = layoutMode === "vertical"
+
+  if (isVertical) {
+    return (
+      <>
+        <DDayBadge />
+        <CheerToast />
+        <div className="h-full flex flex-col justify-end gap-[1.5vw]">
+          {showBirthday && (
+            <BirthdayOverlay userName={user?.user_metadata?.name || "선생님"} />
+          )}
+          <div className="grid grid-cols-2 gap-[1.5vw] shrink-0">
+            <div>
+              {loading ? null : user ? <Profile /> : <Login />}
+            </div>
+            <div className="flex items-start gap-7">
+              <Clock />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-[1.5vw] shrink-0">
+            <div>
+              <CheerButton />
+              <Timer />
+            </div>
+            <Weather />
+          </div>
+          <div className="grid grid-cols-2 gap-[1.5vw] shrink-0">
+            <Folders />
+            <Timetable />
+          </div>
+          <div className="grid grid-cols-2 gap-[1.5vw] shrink-0">
+            <div className="flex flex-col gap-[1.5vw]">
+              <NowTime />
+              <ToDo />
+            </div>
+            <div className="flex flex-col gap-[1.5vw]">
+              <SchoolMeals />
+              <Schedule />
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
     <DDayBadge />
+    <CheerToast />
     <div className="grid h-full grid-cols-[362fr_558fr_558fr_362fr] grid-rows-[auto_minmax(0,1fr)] gap-[1.5vw]">
       {showBirthday && (
         <BirthdayOverlay userName={user?.user_metadata?.name || "선생님"} />
@@ -115,7 +178,10 @@ export default function GridLayout() {
       <div className="flex items-start gap-7">
         <Clock />
       </div>
-      <Timer />
+      <div>
+        <CheerButton />
+        <Timer />
+      </div>
       <Weather />
       <div className="h-full">
         <Folders />

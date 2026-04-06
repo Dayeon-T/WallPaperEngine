@@ -23,6 +23,7 @@ export default function Timetable() {
   const [entries, setEntries] = useState([])
   const [editingCell, setEditingCell] = useState(null)
   const [periods, setPeriods] = useState(DEFAULT_PERIODS)
+  const [highlightToday, setHighlightToday] = useState(true)
 
   const loadTimetable = useCallback(async () => {
     if (!user) return
@@ -31,7 +32,8 @@ export default function Timetable() {
       fetchProfileRow(user.id),
     ])
     if (ttResult.data) setEntries(ttResult.data)
-    if (profileResult.data?.period_schedule) {
+    if (profileResult.data) {
+      if (profileResult.data.today_highlight === false) setHighlightToday(false)
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
         setPeriods(DEFAULT_PERIODS.map((def, i) => ({
@@ -46,6 +48,12 @@ export default function Timetable() {
   useEffect(() => {
     loadTimetable()
   }, [loadTimetable])
+
+  useEffect(() => {
+    const handler = (e) => setHighlightToday(e.detail)
+    window.addEventListener("today-highlight-change", handler)
+    return () => window.removeEventListener("today-highlight-change", handler)
+  }, [])
 
   const entryMap = {}
   const skippedCells = new Set()
@@ -107,7 +115,7 @@ export default function Timetable() {
   const cells = []
   for (let row = 0; row < totalRows; row++) {
     for (let col = 0; col < 6; col++) {
-      const isToday = col >= 1 && col === todayDayIndex
+      const isToday = highlightToday && col >= 1 && col === todayDayIndex
 
       if (row === 0) {
         cells.push(

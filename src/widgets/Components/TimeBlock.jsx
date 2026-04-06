@@ -70,7 +70,7 @@ export default function TimeBlock({
         style={{ backgroundColor: bg || "var(--tt-header-bg, #FBFBFB)" }}
       >
         {label && (
-          <p className="text-[clamp(0.75rem,0.85vw,1rem)] font-semibold">{label}</p>
+          <p className="text-[clamp(0.6rem,0.75vw,0.9rem)] font-semibold">{label}</p>
         )}
         {sub && (
           <p className={`text-[clamp(0.55rem,0.6vw,0.8rem)] font-ubuntu ${isToday ? "text-white/70" : "text-primary"}`}>{sub}</p>
@@ -86,9 +86,6 @@ export default function TimeBlock({
       style={{ backgroundColor: isEditing ? color : (bg || "var(--tt-empty-bg, #EBEBEB)"), ...spanStyle }}
       onDoubleClick={onDoubleClick}
     >
-      {isToday && (
-        <div className="absolute inset-0 rounded-xl bg-black/10 pointer-events-none" />
-      )}
       {label && (
         <p className="text-[clamp(0.7rem,0.8vw,1rem)] font-semibold leading-tight relative">{label}</p>
       )}
@@ -97,7 +94,7 @@ export default function TimeBlock({
       )}
       {isEditing && (
         <div
-          className={`absolute left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-xl p-4 flex flex-col gap-3 z-50 min-w-[200px] ${row >= 7 ? "bottom-full mb-2" : "top-full mt-2"}`}
+          className={`absolute left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-xl p-4 flex flex-col gap-3 z-50 min-w-[200px] ${row >= 6 ? "bottom-full mb-2" : "top-full mt-2"}`}
         >
           <input
             ref={inputRef}
@@ -107,6 +104,7 @@ export default function TimeBlock({
             placeholder="과목명"
             className="w-full text-center text-sm font-semibold bg-gray-100 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
           />
+          <p className="text-[10px] text-gray-400 text-center -mt-1">3글자 이하로 입력해주세요</p>
           <input
             type="text"
             value={room}
@@ -150,6 +148,17 @@ export default function TimeBlock({
               블록타임
             </label>
           )}
+          <button
+            className="w-full rounded-lg bg-primary text-white text-xs font-semibold py-2 transition hover:opacity-90"
+            onClick={() => {
+              const endPeriod = mergeNext
+                ? (currentEntry?.start_period ?? row) + 1
+                : (currentEntry?.start_period ?? row)
+              onSave?.({ subject, room, color, end_period: endPeriod })
+            }}
+          >
+            확인
+          </button>
         </div>
       )}
     </div>

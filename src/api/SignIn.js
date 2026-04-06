@@ -38,6 +38,19 @@ export async function signUp(email, password, profile) {
   return { data, error, errorMessage: error ? mapAuthError(error) : "" }
 }
 
+export async function resetPassword(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email)
+  return { error, errorMessage: error ? mapAuthError(error) : "" }
+}
+
+export async function findEmail(name, schoolName) {
+  const { data, error } = await supabase.rpc("find_email_by_profile", {
+    p_name: name,
+    p_school_name: schoolName,
+  })
+  return { data, error }
+}
+
 export async function signOut() {
   return await supabase.auth.signOut()
 }

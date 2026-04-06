@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { EDUCATION_OFFICES, searchSchools } from "../api/neis"
 import {
@@ -10,6 +10,7 @@ import {
 } from "../api/settings"
 import { signOut } from "../api/SignIn"
 import { fetchSchoolEvents, addSchoolEvent, deleteSchoolEvent } from "../api/schoolEvents"
+import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
 
 const DEFAULT_PERIOD_SCHEDULE = [
@@ -40,14 +41,43 @@ const BG_PRESETS = [
 
 const SECTIONS = [
   { id: "profile", label: "프로필 수정" },
+  { id: "weekly-report", label: "주간 리포트" },
   { id: "password", label: "비밀번호 변경" },
   { id: "period", label: "교시 시간" },
   { id: "school-events", label: "학사일정 관리" },
   { id: "dday", label: "D-Day 관리" },
   { id: "quicklinks", label: "퀵링크" },
+  { id: "layout", label: "레이아웃" },
   { id: "background", label: "배경 설정" },
   { id: "widget-style", label: "위젯 꾸미기" },
+  { id: "changelog", label: "업데이트 내역" },
   { id: "danger", label: "회원 탈퇴" },
+]
+
+const CHANGELOGS = [
+  
+  {
+    date: "2026.04.07",
+    changes: [
+      
+      "할 일에 중요도 표시, 마감일, D-Day, 정렬, 수정 기능이 추가되었어요.",
+      "타이머 시간을 클릭해서 직접 설정할 수 있어요.",
+      "같은 학교 동료에게 응원 메시지를 보낼 수 있어요.",
+      "아이디 찾기, 비밀번호 찾기 페이지가 추가되었어요.",
+      "설정에서 D-Day, 학사일정, 퀵링크를 관리할 수 있어요.",
+      "배경과 위젯 스타일을 자유롭게 꾸밀 수 있어요.",
+      "가로/세로 모니터에 맞는 레이아웃을 선택할 수 있어요.",
+      "주간 리포트에서 이번 주 완료한 할 일을 확인할 수 있어요.",
+      "기능 보기 버튼과 업데이트 내역 페이지가 추가되었어요.",
+      
+    ],
+  },
+  {
+    date: "2026.04.06",
+    changes: [
+      "대시보드 서비스가 오픈되었어요!",
+    ],
+  },
 ]
 
 const inputClass =
@@ -59,10 +89,28 @@ export default function Settings() {
   const { user } = useAuth()
   const [activeSection, setActiveSection] = useState("profile")
   const [msg, setMsg] = useState({ text: "", type: "" })
+  const [hasNewUpdate, setHasNewUpdate] = useState(() => {
+    const lastRead = localStorage.getItem("changelog_last_read")
+    const latest = CHANGELOGS[0]?.date
+    return latest && lastRead !== latest
+  })
 
   const showMsg = (text, type = "success") => {
     setMsg({ text, type })
     setTimeout(() => setMsg({ text: "", type: "" }), 3000)
+  }
+
+  useEffect(() => {
+    const latest = CHANGELOGS[0]?.date
+    if (latest) localStorage.setItem("changelog_latest", latest)
+  }, [])
+
+  const handleSectionClick = (id) => {
+    setActiveSection(id)
+    if (id === "changelog" && hasNewUpdate) {
+      localStorage.setItem("changelog_last_read", CHANGELOGS[0]?.date)
+      setHasNewUpdate(false)
+    }
   }
 
   if (!user) return null
@@ -76,7 +124,7 @@ export default function Settings() {
         {SECTIONS.map((s) => (
           <button
             key={s.id}
-            onClick={() => setActiveSection(s.id)}
+            onClick={() => handleSectionClick(s.id)}
             className={`text-left px-4 py-2.5 rounded-lg text-sm transition ${
               activeSection === s.id
                 ? "bg-primary/10 text-primary font-semibold"
@@ -86,6 +134,9 @@ export default function Settings() {
             {s.label}
           </button>
         ))}
+        <div className="mt-auto pt-4">
+          <p className="text-xs text-gray-700 px-4">기능 추가 문의 : DayeonT</p>
+        </div>
       </nav>
 
       <main className="flex-1 p-10 overflow-y-auto">
@@ -99,6 +150,9 @@ export default function Settings() {
 
         {activeSection === "profile" && (
           <ProfileSection user={user} showMsg={showMsg} />
+        )}
+        {activeSection === "weekly-report" && (
+          <WeeklyReportSection user={user} />
         )}
         {activeSection === "password" && (
           <PasswordSection showMsg={showMsg} />
@@ -115,11 +169,17 @@ export default function Settings() {
         {activeSection === "quicklinks" && (
           <QuickLinksSection user={user} showMsg={showMsg} />
         )}
+        {activeSection === "layout" && (
+          <LayoutSection user={user} showMsg={showMsg} />
+        )}
         {activeSection === "background" && (
           <BackgroundSection user={user} showMsg={showMsg} />
         )}
         {activeSection === "widget-style" && (
           <WidgetStyleSection user={user} showMsg={showMsg} />
+        )}
+        {activeSection === "changelog" && (
+          <ChangelogSection />
         )}
         {activeSection === "danger" && (
           <DeleteAccountSection />
@@ -156,14 +216,14 @@ function ProfileSection({ user, showMsg }) {
   }, [])
 
   useEffect(() => {
-    if (!atptCode || schoolQuery.length < 2) { setSchoolResults([]); return }
+    if (!atptCode || schoolQuery.length < 2 || schoolCode) { setSchoolResults([]); return }
     const t = setTimeout(async () => {
       const results = await searchSchools(atptCode, schoolQuery)
       setSchoolResults(results)
       setShowDropdown(true)
     }, 300)
     return () => clearTimeout(t)
-  }, [schoolQuery, atptCode])
+  }, [schoolQuery, atptCode, schoolCode])
 
   useEffect(() => {
     const handler = (e) => {
@@ -186,6 +246,13 @@ function ProfileSection({ user, showMsg }) {
       school_code: schoolCode,
       birthday,
     })
+    if (!error) {
+      await upsertProfileRow(user.id, {
+        name,
+        atpt_code: atptCode,
+        school_code: schoolCode,
+      })
+    }
     setSaving(false)
     showMsg(error ? error.message : "프로필이 저장되었습니다.", error ? "error" : "success")
   }
@@ -944,15 +1011,15 @@ function WidgetStyleSection({ user, showMsg }) {
   return (
     <div>
       <h2 className="text-xl font-bold mb-1">위젯 꾸미기</h2>
-      <p className="text-sm text-gray-500 mb-8">위젯의 배경, 테두리, 그림자 등을 자유롭게 꾸밀 수 있습니다.</p>
+      <p className="text-sm text-gray-500 mb-4">위젯의 배경, 테두리, 그림자 등을 자유롭게 꾸밀 수 있습니다.</p>
 
-      <div className="flex gap-10">
+      <div className="flex gap-6">
         {/* Controls */}
-        <div className="flex-1 flex flex-col gap-8 min-w-0">
+        <div className="flex-1 flex flex-col gap-5 min-w-0">
           {/* Background */}
           <fieldset>
-            <legend className="text-sm font-semibold mb-3">배경</legend>
-            <div className="flex flex-col gap-3">
+            <legend className="text-sm font-semibold mb-2">배경</legend>
+            <div className="flex flex-col gap-2">
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">색상</label>
                 <input type="color" value={style.bgColor} onChange={e => update("bgColor", e.target.value)}
@@ -983,8 +1050,8 @@ function WidgetStyleSection({ user, showMsg }) {
 
           {/* Border */}
           <fieldset>
-            <legend className="text-sm font-semibold mb-3">테두리</legend>
-            <div className="flex flex-col gap-3">
+            <legend className="text-sm font-semibold mb-2">테두리</legend>
+            <div className="flex flex-col gap-2">
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">두께</label>
                 <input type="range" min={0} max={5} value={style.borderWidth}
@@ -1020,7 +1087,7 @@ function WidgetStyleSection({ user, showMsg }) {
 
           {/* Border Radius */}
           <fieldset>
-            <legend className="text-sm font-semibold mb-3">모서리 둥글기</legend>
+            <legend className="text-sm font-semibold mb-2">모서리 둥글기</legend>
             <div className="flex items-center gap-4">
               <input type="range" min={0} max={32} value={style.borderRadius}
                 onChange={e => update("borderRadius", Number(e.target.value))}
@@ -1031,7 +1098,7 @@ function WidgetStyleSection({ user, showMsg }) {
 
           {/* Shadow */}
           <fieldset>
-            <legend className="text-sm font-semibold mb-3">그림자</legend>
+            <legend className="text-sm font-semibold mb-2">그림자</legend>
             <div className="flex gap-2 flex-wrap">
               {SHADOW_PRESETS.map(sp => (
                 <button key={sp.id} onClick={() => update("shadow", sp.id)}
@@ -1046,48 +1113,28 @@ function WidgetStyleSection({ user, showMsg }) {
 
           {/* Detail Colors */}
           <fieldset>
-            <legend className="text-sm font-semibold mb-3">세부 색상</legend>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.btnBg} onChange={e => update("btnBg", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">퀵링크 바</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.btnText} onChange={e => update("btnText", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">퀵링크 글자</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.todoBg} onChange={e => update("todoBg", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">할일 입력창</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.todoText} onChange={e => update("todoText", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">할일 글자</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.ttHeaderBg} onChange={e => update("ttHeaderBg", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">시간표 헤더</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.ttTodayBg} onChange={e => update("ttTodayBg", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">시간표 오늘</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={style.ttEmptyBg} onChange={e => update("ttEmptyBg", e.target.value)}
-                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
-                <label className="text-sm text-gray-600">시간표 빈칸</label>
-              </div>
+            <legend className="text-sm font-semibold mb-2">세부 색상</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: "btnBg", label: "퀵링크 바" },
+                { key: "btnText", label: "퀵링크 글자" },
+                { key: "todoBg", label: "할일 입력창" },
+                { key: "todoText", label: "할일 글자" },
+                { key: "ttHeaderBg", label: "시간표 헤더" },
+                { key: "ttTodayBg", label: "시간표 오늘" },
+                { key: "ttEmptyBg", label: "시간표 빈칸" },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <input type="color" value={style[key]} onChange={e => update(key, e.target.value)}
+                    className="w-7 h-7 rounded-lg border border-gray-200 cursor-pointer p-0.5 shrink-0" />
+                  <label className="text-sm text-gray-600">{label}</label>
+                </div>
+              ))}
             </div>
           </fieldset>
 
           {/* Buttons */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-1">
             <button className={btnPrimary} disabled={saving} onClick={handleSave}>
               {saving ? "저장 중..." : "저장"}
             </button>
@@ -1116,12 +1163,12 @@ function WidgetStyleSection({ user, showMsg }) {
               </div>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3 mb-5">
+          <p className="text-xs text-gray-400 mt-2 mb-3">
             체크무늬 배경은 투명도 확인용입니다.
           </p>
 
           {/* Timetable + QuickLink preview */}
-          <p className="text-sm font-semibold mb-3">시간표 / 퀵링크 미리보기</p>
+          <p className="text-sm font-semibold mb-2">시간표 / 퀵링크 미리보기</p>
           <div className="rounded-xl overflow-hidden border border-gray-100">
             <div className="grid grid-cols-4 gap-0.5 p-2" style={{ backgroundColor: previewBg }}>
               <div className="rounded-md text-center text-[10px] py-1.5 font-semibold" style={{ backgroundColor: style.ttHeaderBg }} />
@@ -1152,7 +1199,7 @@ function WidgetStyleSection({ user, showMsg }) {
           </div>
 
           {/* ToDo preview */}
-          <p className="text-sm font-semibold mb-3 mt-5">할 일 미리보기</p>
+          <p className="text-sm font-semibold mb-2 mt-3">할 일 미리보기</p>
           <div className="rounded-xl overflow-hidden border border-gray-100 p-3" style={previewStyle}>
             <div className="flex gap-1.5 mb-2">
               <div className="flex-1 rounded-lg px-2 py-1.5 text-[10px]"
@@ -1346,6 +1393,304 @@ function SchoolEventsSection({ user, showMsg }) {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ───────── 섹션: 레이아웃 ───────── */
+function LayoutSection({ user, showMsg }) {
+  const [mode, setMode] = useState("horizontal")
+  const [todayHighlight, setTodayHighlight] = useState(true)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.layout_mode) setMode(data.layout_mode)
+      if (data?.today_highlight === false) setTodayHighlight(false)
+      setLoaded(true)
+    })()
+  }, [user.id])
+
+  const handleSave = async (selected) => {
+    setMode(selected)
+    setSaving(true)
+    const { error } = await upsertProfileRow(user.id, { layout_mode: selected })
+    setSaving(false)
+    if (error) { showMsg(error.message, "error"); return }
+    window.dispatchEvent(new CustomEvent("layout-change", { detail: selected }))
+    showMsg("레이아웃이 변경되었습니다.")
+  }
+
+  const handleHighlightToggle = async () => {
+    const next = !todayHighlight
+    setTodayHighlight(next)
+    const { error } = await upsertProfileRow(user.id, { today_highlight: next })
+    if (error) { showMsg(error.message, "error"); return }
+    window.dispatchEvent(new CustomEvent("today-highlight-change", { detail: next }))
+    showMsg(next ? "오늘 하이라이트를 켰습니다." : "오늘 하이라이트를 껐습니다.")
+  }
+
+  if (!loaded) return <p className="text-sm text-gray-400">불러오는 중...</p>
+
+  const options = [
+    {
+      id: "horizontal",
+      label: "가로 모니터",
+      desc: "기본 4열 레이아웃",
+      grid: (
+        <div className="grid grid-cols-4 grid-rows-2 gap-1 w-full aspect-video">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="rounded bg-gray-300" />
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: "vertical",
+      label: "세로 모니터",
+      desc: "2열 하단 정렬 레이아웃",
+      grid: (
+        <div className="w-full aspect-[9/16] flex flex-col justify-end gap-1">
+          <div className="flex-1 rounded bg-gray-100 flex items-center justify-center text-[10px] text-gray-400">
+            배경
+          </div>
+          <div className="grid grid-cols-2 grid-rows-4 gap-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded bg-gray-300 h-5" />
+            ))}
+          </div>
+        </div>
+      ),
+    },
+  ]
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-2">레이아웃</h2>
+      <p className="text-sm text-gray-400 mb-6">모니터 방향에 맞는 레이아웃을 선택하세요.</p>
+      <div className="flex gap-4 max-w-lg">
+        {options.map((opt) => (
+          <button
+            key={opt.id}
+            disabled={saving}
+            onClick={() => handleSave(opt.id)}
+            className={`flex-1 flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition ${
+              mode === opt.id
+                ? "border-primary bg-primary/5"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <div className="w-full max-w-[120px]">
+              {opt.grid}
+            </div>
+            <div className="text-center">
+              <p className={`text-sm font-semibold ${mode === opt.id ? "text-primary" : ""}`}>
+                {opt.label}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="text-base font-semibold mb-1">시간표 오늘 하이라이트</h3>
+        <p className="text-sm text-gray-400 mb-4">오늘 요일 헤더에 하이라이트 효과를 표시합니다.</p>
+        <button
+          onClick={handleHighlightToggle}
+          className={`relative w-12 h-7 rounded-full transition-colors ${todayHighlight ? "bg-primary" : "bg-gray-300"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${todayHighlight ? "translate-x-5" : ""}`}
+          />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ───────── 섹션: 주간 리포트 ───────── */
+const REPORT_DAYS = ["월", "화", "수", "목", "금", "토", "일"]
+const REPORT_MESSAGES = [
+  { min: 0, text: "이번 주도 화이팅!", emoji: "💪" },
+  { min: 3, text: "좋은 흐름이에요!", emoji: "🌱" },
+  { min: 7, text: "꾸준히 잘 하고 있어요!", emoji: "⭐" },
+  { min: 15, text: "정말 대단해요!", emoji: "🔥" },
+  { min: 25, text: "이번 주의 MVP!", emoji: "🏆" },
+]
+
+function getReportMessage(count) {
+  let msg = REPORT_MESSAGES[0]
+  for (const m of REPORT_MESSAGES) {
+    if (count >= m.min) msg = m
+  }
+  return msg
+}
+
+function getMondayOfWeek() {
+  const now = new Date()
+  const day = now.getDay()
+  const offset = day === 0 ? -6 : 1 - day
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(now.getDate() + offset)
+  return monday
+}
+
+function WeeklyReportSection({ user }) {
+  const [dailyCounts, setDailyCounts] = useState([0, 0, 0, 0, 0, 0, 0])
+  const [loaded, setLoaded] = useState(false)
+
+  const total = dailyCounts.reduce((a, b) => a + b, 0)
+  const max = Math.max(...dailyCounts, 1)
+
+  const load = useCallback(async () => {
+    if (!user) return
+    const { data } = await fetchWeeklyCompleted(user.id)
+    if (!data) { setLoaded(true); return }
+
+    const monday = getMondayOfWeek()
+    const counts = [0, 0, 0, 0, 0, 0, 0]
+
+    for (const todo of data) {
+      if (!todo.completed_at) continue
+      const completed = new Date(todo.completed_at)
+      const diffDays = Math.floor((completed - monday) / (1000 * 60 * 60 * 24))
+      if (diffDays >= 0 && diffDays < 7) counts[diffDays]++
+    }
+
+    setDailyCounts(counts)
+    setLoaded(true)
+  }, [user])
+
+  useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const handler = () => load()
+    window.addEventListener("todo-change", handler)
+    return () => window.removeEventListener("todo-change", handler)
+  }, [load])
+
+  const today = new Date().getDay()
+  const todayIdx = today === 0 ? 6 : today - 1
+  const msg = getReportMessage(total)
+
+  const monday = getMondayOfWeek()
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const formatMD = (d) => `${d.getMonth() + 1}/${d.getDate()}`
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-1">주간 리포트</h2>
+      <p className="text-sm text-gray-400 mb-8">
+        {formatMD(monday)} ~ {formatMD(sunday)} 동안 완료한 할 일을 요약합니다.
+      </p>
+
+      <div className="max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-2xl">
+            {msg.emoji}
+          </div>
+          <div>
+            <p className="text-2xl font-bold font-ubuntu">{total}<span className="text-sm font-normal text-gray-500 ml-1">개 완료</span></p>
+            <p className="text-sm text-gray-500">{msg.text}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gray-50 p-6">
+          <div className="flex items-end justify-between gap-3" style={{ height: "10rem" }}>
+            {dailyCounts.map((count, i) => {
+              const barHeight = count > 0 ? Math.max(12, (count / max) * 100) : 4
+              const isToday = i === todayIdx
+
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full">
+                  <span
+                    className="text-xs font-bold tabular-nums"
+                    style={{
+                      color: count > 0 ? "#2b2b2b" : "transparent",
+                      transition: "color 0.3s",
+                    }}
+                  >
+                    {count}
+                  </span>
+                  <div className="w-full flex-1 flex items-end">
+                    <div
+                      className="w-full rounded-lg transition-all duration-700"
+                      style={{
+                        height: `${barHeight}%`,
+                        minHeight: "3px",
+                        background: isToday
+                          ? "#4A4A4A"
+                          : count > 0
+                            ? "#C8C8C8"
+                            : "#E8E8E8",
+                        opacity: loaded ? 1 : 0,
+                        transition: "height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s, background 0.3s",
+                      }}
+                    />
+                  </div>
+                  <span
+                    className="text-xs"
+                    style={{
+                      fontWeight: isToday ? 700 : 400,
+                      color: isToday ? "#4A4A4A" : "#979797",
+                    }}
+                  >
+                    {REPORT_DAYS[i]}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <div className="flex-1 rounded-xl bg-gray-50 p-4 text-center">
+            <p className="text-xs text-gray-400 mb-1">오늘</p>
+            <p className="text-lg font-bold font-ubuntu">{dailyCounts[todayIdx]}<span className="text-xs font-normal text-gray-400 ml-0.5">개</span></p>
+          </div>
+          <div className="flex-1 rounded-xl bg-gray-50 p-4 text-center">
+            <p className="text-xs text-gray-400 mb-1">최고 기록</p>
+            <p className="text-lg font-bold font-ubuntu">{Math.max(...dailyCounts)}<span className="text-xs font-normal text-gray-400 ml-0.5">개</span></p>
+          </div>
+          <div className="flex-1 rounded-xl bg-gray-50 p-4 text-center">
+            <p className="text-xs text-gray-400 mb-1">일 평균</p>
+            <p className="text-lg font-bold font-ubuntu">{total > 0 ? (total / 7).toFixed(1) : "0"}<span className="text-xs font-normal text-gray-400 ml-0.5">개</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ───────── 섹션: 업데이트 내역 ───────── */
+function ChangelogSection() {
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-1">업데이트 내역</h2>
+      <p className="text-sm text-gray-400 mb-8">새로운 기능과 변경 사항을 확인하세요.</p>
+
+      <div className="max-w-lg flex flex-col gap-6">
+        {CHANGELOGS.map((log, i) => (
+          <div key={i} className="relative pl-6 border-l-2 border-gray-200">
+            <div className="absolute -left-[7px] top-0.5 w-3 h-3 rounded-full bg-primary" />
+            <p className="text-sm font-bold mb-2">{log.date}</p>
+            <ul className="flex flex-col gap-1.5">
+              {log.changes.map((change, j) => (
+                <li key={j} className="text-sm text-gray-600 flex items-start gap-2">
+                  <span className="text-primary mt-0.5 shrink-0">•</span>
+                  {change}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      
     </div>
   )
 }
