@@ -15,7 +15,10 @@ export default function TimeBlock({
   isHeader = false,
   isEditing = false,
   isToday = false,
+  isSelected = false,
+  swapMode = false,
   onDoubleClick,
+  onClick,
   onSave,
   currentEntry,
   row,
@@ -82,9 +85,12 @@ export default function TimeBlock({
   return (
     <div
       ref={ref}
-      className="rounded-xl flex flex-col items-center justify-center gap-[2px] transition-shadow relative"
+      className={`rounded-xl flex flex-col items-center justify-center gap-[2px] transition-all relative ${
+        isSelected ? "ring-2 ring-primary ring-offset-1 scale-95" : ""
+      } ${swapMode ? "cursor-pointer hover:opacity-80" : ""}`}
       style={{ backgroundColor: isEditing ? color : (bg || "var(--tt-empty-bg, #EBEBEB)"), ...spanStyle }}
       onDoubleClick={onDoubleClick}
+      onClick={onClick}
     >
       {label && (
         <p className="text-[clamp(0.7rem,0.8vw,1rem)] font-semibold leading-tight relative">{label}</p>
