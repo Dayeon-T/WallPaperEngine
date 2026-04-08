@@ -9,6 +9,7 @@ import {
   toggleImportant,
   updateTodoContent,
 } from "../api/todos"
+import TodoHistory from "./Components/TodoHistory"
 
 const SORT_MODES = [
   { id: "important", label: "중요도순" },
@@ -49,6 +50,7 @@ export default function ToDo() {
   const [sortMode, setSortMode] = useState("important")
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(5)
+  const [showHistory, setShowHistory] = useState(false)
   const [dragIdx, setDragIdx] = useState(null)
   const [overIdx, setOverIdx] = useState(null)
   const dragNode = useRef(null)
@@ -215,20 +217,36 @@ export default function ToDo() {
     dragNode.current = null
   }
 
+  if (showHistory) {
+    return (
+      <div className="h-full bg-widjet rounded-2xl p-7 flex flex-col min-h-0">
+        <TodoHistory onClose={() => setShowHistory(false)} />
+      </div>
+    )
+  }
+
   return (
     <div className="h-full bg-widjet rounded-2xl p-7 flex flex-col min-h-0">
       <div className="flex items-center justify-between shrink-0">
         <p className="text-[clamp(0.9rem,1vw,1.25rem)] font-semibold">할 일</p>
-        <button
-          onClick={cycleSortMode}
-          className="text-[clamp(0.55rem,0.65vw,0.75rem)] text-muted hover:text-text transition-colors flex items-center gap-1 select-none"
-          title="클릭하여 정렬 변경"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18M6 12h12M9 18h6" />
-          </svg>
-          {currentSortLabel}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowHistory(true)}
+            className="text-[clamp(0.55rem,0.65vw,0.75rem)] text-muted hover:text-text transition-colors"
+          >
+            기록
+          </button>
+          <button
+            onClick={cycleSortMode}
+            className="text-[clamp(0.55rem,0.65vw,0.75rem)] text-muted hover:text-text transition-colors flex items-center gap-1 select-none"
+            title="클릭하여 정렬 변경"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M6 12h12M9 18h6" />
+            </svg>
+            {currentSortLabel}
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mt-4 shrink-0">

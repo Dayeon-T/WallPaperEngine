@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchProfileRow } from "../api/settings"
+import { joinPresence } from "../api/cheers"
 import Login from "../widgets/Login"
 import Profile from "../widgets/Profile"
 import Clock from "../widgets/Clock"
@@ -110,6 +111,12 @@ export default function GridLayout() {
     window.addEventListener("layout-change", handler)
     return () => window.removeEventListener("layout-change", handler)
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    const leave = joinPresence(user)
+    return leave
+  }, [user])
 
   useEffect(() => {
     if (!user || !isBirthdayToday(user)) return

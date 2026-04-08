@@ -8,6 +8,7 @@ import SignUp from "./pages/SignUp"
 import FindId from "./pages/FindId"
 import FindPassword from "./pages/FindPassword"
 import Settings from "./pages/Settings"
+import Messages from "./pages/Messages"
 
 function bgPrefsToStyle(prefs) {
   if (!prefs) return {}
@@ -105,6 +106,7 @@ function App() {
           <Route path="/find-id" element={<FindId />} />
           <Route path="/find-password" element={<FindPassword />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/messages" element={<Messages />} />
         </Routes>
       </div>
     </div>

@@ -94,3 +94,22 @@ export async function deleteTodo(id) {
 
   return { error }
 }
+
+export async function searchCompletedTodos(userId, { from, to, keyword } = {}) {
+  let query = supabase
+    .from("todos")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_done", true)
+    .not("completed_at", "is", null)
+    .order("completed_at", { ascending: false })
+
+  if (from) query = query.gte("completed_at", new Date(from + "T00:00:00").toISOString())
+  if (to) query = query.lte("completed_at", new Date(to + "T23:59:59").toISOString())
+  if (keyword) query = query.ilike("content", `%${keyword}%`)
+
+  query = query.limit(100)
+
+  const { data, error } = await query
+  return { data: data ?? [], error }
+}
