@@ -172,8 +172,9 @@ export default function GridLayout() {
       {showBirthday && (
         <BirthdayOverlay userName={user?.user_metadata?.name || "선생님"} />
       )}
-      <div>
-        {loading ? null : user ? <Profile /> : <Login />}
+      <div className="row-span-2 flex flex-col gap-[1.5vw]">
+        <div>{loading ? null : user ? <Profile /> : <Login />}</div>
+        <div className="flex-1"><Folders /></div>
       </div>
       <div className="flex items-start gap-7">
         <Clock />
@@ -183,9 +184,6 @@ export default function GridLayout() {
         <Timer />
       </div>
       <Weather />
-      <div className="h-full">
-        <Folders />
-      </div>
       <Timetable />
       <div className="h-full flex flex-col gap-7">
         <NowTime />

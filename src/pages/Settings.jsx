@@ -46,6 +46,7 @@ const SECTIONS = [
   { id: "period", label: "교시 시간" },
   { id: "school-events", label: "학사일정 관리" },
   { id: "dday", label: "D-Day 관리" },
+  { id: "folders", label: "폴더 이름" },
   { id: "quicklinks", label: "퀵링크" },
   { id: "layout", label: "레이아웃" },
   { id: "background", label: "배경 설정" },
@@ -147,6 +148,9 @@ export default function Settings() {
         )}
         {activeSection === "dday" && (
           <DDaySection user={user} showMsg={showMsg} />
+        )}
+        {activeSection === "folders" && (
+          <FolderNamesSection user={user} showMsg={showMsg} />
         )}
         {activeSection === "quicklinks" && (
           <QuickLinksSection user={user} showMsg={showMsg} />
@@ -672,6 +676,76 @@ function DDaySection({ user, showMsg }) {
   )
 }
 
+/* ───────── 섹션: 폴더 이름 ───────── */
+const DEFAULT_FOLDER_NAMES = ["진행중인 업무", "나중에 볼 파일", "기타"]
+
+function FolderNamesSection({ user, showMsg }) {
+  const [names, setNames] = useState(() => DEFAULT_FOLDER_NAMES.map(n => n))
+  const [saving, setSaving] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.folder_names && Array.isArray(data.folder_names) && data.folder_names.length > 0) {
+        const merged = DEFAULT_FOLDER_NAMES.map((def, i) => data.folder_names[i] || def)
+        setNames(merged)
+      }
+      setLoaded(true)
+    })()
+  }, [user.id])
+
+  const updateName = (index, value) => {
+    setNames(prev => prev.map((n, i) => (i === index ? value : n)))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    const { error } = await upsertProfileRow(user.id, { folder_names: names })
+    setSaving(false)
+    if (error) { showMsg(error.message, "error"); return }
+    window.dispatchEvent(new CustomEvent("folder-names-change", { detail: names }))
+    showMsg("폴더 이름이 저장되었습니다.")
+  }
+
+  const handleReset = () => {
+    setNames(DEFAULT_FOLDER_NAMES.map(n => n))
+  }
+
+  if (!loaded) return <p className="text-sm text-gray-400">불러오는 중...</p>
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold mb-2">폴더 이름</h2>
+      <p className="text-sm text-gray-400 mb-6">대시보드에 표시되는 폴더 위젯의 이름을 변경할 수 있습니다.</p>
+      <div className="max-w-md flex flex-col gap-4">
+        {names.map((name, i) => (
+          <div key={i}>
+            <label className="text-xs text-gray-500 mb-1 block">폴더 {i + 1}</label>
+            <input
+              className={inputClass}
+              value={name}
+              onChange={(e) => updateName(i, e.target.value)}
+              placeholder={DEFAULT_FOLDER_NAMES[i]}
+            />
+          </div>
+        ))}
+        <div className="flex gap-3 mt-2">
+          <button className={btnPrimary} disabled={saving} onClick={handleSave}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+          <button
+            className="rounded-lg border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+            onClick={handleReset}
+          >
+            기본값으로 초기화
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ───────── 섹션 4: 퀵링크 편집 ───────── */
 function QuickLinksSection({ user, showMsg }) {
   const [links, setLinks] = useState(() => DEFAULT_QUICK_LINKS.map((l) => ({ ...l })))
@@ -693,7 +767,7 @@ function QuickLinksSection({ user, showMsg }) {
   }
 
   const addLink = () => {
-    if (links.length >= 3) return
+    if (links.length >= 7) return
     setLinks((prev) => [...prev, { name: "", url: "" }])
   }
 
@@ -714,7 +788,7 @@ function QuickLinksSection({ user, showMsg }) {
   return (
     <div>
       <h2 className="text-xl font-bold mb-2">퀵링크 편집</h2>
-      <p className="text-sm text-gray-400 mb-6">프로필 하단에 표시되는 바로가기 링크입니다. 최대 3개 (+ 설정 고정)</p>
+      <p className="text-sm text-gray-400 mb-6">프로필 하단에 표시되는 바로가기 링크입니다. 최대 7개 (+ 설정 고정, 4개 초과 시 2줄)</p>
       <div className="max-w-lg flex flex-col gap-3">
         {links.map((link, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -738,7 +812,7 @@ function QuickLinksSection({ user, showMsg }) {
             </button>
           </div>
         ))}
-        {links.length < 3 && (
+        {links.length < 7 && (
           <button
             className="text-sm text-primary font-medium hover:underline self-start"
             onClick={addLink}
@@ -908,6 +982,8 @@ const DEFAULT_WIDGET_STYLE = {
   ttHeaderBg: "#FBFBFB",
   ttTodayBg: "#3B3B3B",
   ttEmptyBg: "#EBEBEB",
+  scheduleTodayBg: "#3B3B3B",
+  scheduleTodayText: "#FFFFFF",
 }
 
 const SHADOW_PRESETS = [
@@ -1207,6 +1283,7 @@ function WidgetStyleSection({ user, showMsg }) {
               <span className="text-[10px] flex-1 line-through text-gray-400">회의 준비</span>
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -1224,6 +1301,9 @@ function SchoolEventsSection({ user, showMsg }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "" })
+  const [todayBg, setTodayBg] = useState("#3B3B3B")
+  const [todayText, setTodayText] = useState("#FFFFFF")
+  const [styleSaving, setStyleSaving] = useState(false)
 
   useEffect(() => {
     if (!atptCode || !schoolCode) { setLoading(false); return }
@@ -1233,6 +1313,27 @@ function SchoolEventsSection({ user, showMsg }) {
       setLoading(false)
     })()
   }, [atptCode, schoolCode])
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.widget_style) {
+        if (data.widget_style.scheduleTodayBg) setTodayBg(data.widget_style.scheduleTodayBg)
+        if (data.widget_style.scheduleTodayText) setTodayText(data.widget_style.scheduleTodayText)
+      }
+    })()
+  }, [user.id])
+
+  const handleStyleSave = async () => {
+    setStyleSaving(true)
+    const { data: current } = await fetchProfileRow(user.id)
+    const ws = { ...(current?.widget_style || {}), scheduleTodayBg: todayBg, scheduleTodayText: todayText }
+    const { error } = await upsertProfileRow(user.id, { widget_style: ws })
+    setStyleSaving(false)
+    if (error) { showMsg(error.message, "error"); return }
+    window.dispatchEvent(new CustomEvent("widget-style-change", { detail: ws }))
+    showMsg("학사일정 스타일이 저장되었습니다.")
+  }
 
   const handleAdd = async () => {
     if (!form.name.trim() || !form.startDate) return
@@ -1291,89 +1392,136 @@ function SchoolEventsSection({ user, showMsg }) {
         {schoolName || "내 학교"}의 학사일정을 추가하면, 같은 학교 선생님 모두에게 표시됩니다.
       </p>
 
-      <div className="max-w-lg flex flex-col gap-5">
-        <div className="flex flex-col gap-3 p-5 rounded-xl bg-gray-50">
-          <p className="text-sm font-semibold">새 일정 추가</p>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">일정 이름</label>
-            <input
-              className={inputClass}
-              placeholder="예: 1학기 중간고사"
-              value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-            />
+      <div className="flex gap-8">
+        {/* 왼쪽: 일정 추가 + 목록 */}
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+          <div className="flex flex-col gap-3 p-5 rounded-xl bg-gray-50">
+            <p className="text-sm font-semibold">새 일정 추가</p>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">일정 이름</label>
+              <input
+                className={inputClass}
+                placeholder="예: 1학기 중간고사"
+                value={form.name}
+                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">시작일</label>
+              <DateDropdown
+                value={form.startDate}
+                onChange={(v) => setForm(f => ({ ...f, startDate: v }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">종료일 (하루짜리면 비워두세요)</label>
+              <DateDropdown
+                value={form.endDate}
+                onChange={(v) => setForm(f => ({ ...f, endDate: v }))}
+              />
+            </div>
+            <button className={btnPrimary} disabled={saving} onClick={handleAdd}>
+              {saving ? "추가 중..." : "추가"}
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">시작일</label>
-            <DateDropdown
-              value={form.startDate}
-              onChange={(v) => setForm(f => ({ ...f, startDate: v }))}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">종료일 (하루짜리면 비워두세요)</label>
-            <DateDropdown
-              value={form.endDate}
-              onChange={(v) => setForm(f => ({ ...f, endDate: v }))}
-            />
-          </div>
-          <button className={btnPrimary} disabled={saving} onClick={handleAdd}>
-            {saving ? "추가 중..." : "추가"}
-          </button>
+
+          {loading && <p className="text-sm text-gray-400">불러오는 중...</p>}
+
+          {!loading && events.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">
+              아직 추가된 학사일정이 없습니다.
+            </p>
+          )}
+
+          {!loading && events.length > 0 && (
+            <>
+              <div className="flex flex-col gap-2">
+                {pagedEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="flex items-center justify-between rounded-xl px-5 py-4 bg-gray-50 hover:bg-gray-100 transition-colors group"
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <span className="text-sm font-medium truncate">{ev.name}</span>
+                      <span className="text-xs text-gray-400">{formatRange(ev)}</span>
+                    </div>
+                    {ev.created_by === user.id && (
+                      <button
+                        onClick={() => handleDelete(ev.id)}
+                        className="opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-red-500 transition-all shrink-0 ml-2"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="text-sm hover:opacity-60 transition-opacity disabled:opacity-30"
+                  >
+                    ◀
+                  </button>
+                  <span className="text-sm text-gray-500">{page + 1} / {totalPages}</span>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="text-sm hover:opacity-60 transition-opacity disabled:opacity-30"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {loading && <p className="text-sm text-gray-400">불러오는 중...</p>}
-
-        {!loading && events.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-4">
-            아직 추가된 학사일정이 없습니다.
-          </p>
-        )}
-
-        {!loading && events.length > 0 && (
-          <>
-            <div className="flex flex-col gap-2">
-              {pagedEvents.map((ev) => (
-                <div
-                  key={ev.id}
-                  className="flex items-center justify-between rounded-xl px-5 py-4 bg-gray-50 hover:bg-gray-100 transition-colors group"
-                >
-                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <span className="text-sm font-medium truncate">{ev.name}</span>
-                    <span className="text-xs text-gray-400">{formatRange(ev)}</span>
-                  </div>
-                  {ev.created_by === user.id && (
-                    <button
-                      onClick={() => handleDelete(ev.id)}
-                      className="opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-red-500 transition-all shrink-0 ml-2"
-                    >
-                      삭제
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="text-sm hover:opacity-60 transition-opacity disabled:opacity-30"
-                >
-                  ◀
-                </button>
-                <span className="text-sm text-gray-500">{page + 1} / {totalPages}</span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="text-sm hover:opacity-60 transition-opacity disabled:opacity-30"
-                >
-                  ▶
-                </button>
+        {/* 오른쪽: 오늘 일정 색상 + 미리보기 */}
+        <div className="w-56 shrink-0 sticky top-10 self-start flex flex-col gap-5">
+          <div>
+            <p className="text-sm font-semibold mb-1">오늘 일정 색상</p>
+            <p className="text-xs text-gray-400 mb-4">오늘 학사일정의 색상을 설정합니다.</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <input type="color" value={todayBg} onChange={(e) => setTodayBg(e.target.value)}
+                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                <span className="text-sm text-gray-600">배경색</span>
               </div>
-            )}
-          </>
-        )}
+              <div className="flex items-center gap-3">
+                <input type="color" value={todayText} onChange={(e) => setTodayText(e.target.value)}
+                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                <span className="text-sm text-gray-600">글자색</span>
+              </div>
+              <button className={`${btnPrimary} self-start mt-1`} disabled={styleSaving} onClick={handleStyleSave}>
+                {styleSaving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-500 font-medium mb-2">미리보기</p>
+            <div className="flex flex-col gap-1.5">
+              <div
+                className="flex items-center gap-3 rounded-xl px-4 py-3"
+                style={{ backgroundColor: todayBg, color: todayText }}
+              >
+                <span className="text-lg font-bold min-w-[1.5em] text-center" style={{ color: todayText }}>8</span>
+                <span className="text-xs font-medium">전국연합학력평가</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-gray-100 text-gray-800">
+                <span className="text-lg font-bold min-w-[1.5em] text-center text-gray-700">10</span>
+                <span className="text-xs font-medium">학부모 상담주간</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl px-4 py-3 bg-gray-100 text-gray-800">
+                <span className="text-lg font-bold min-w-[1.5em] text-center text-gray-700">12</span>
+                <span className="text-xs font-medium">봄 현장체험학습</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

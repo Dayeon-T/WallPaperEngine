@@ -177,14 +177,19 @@ export default function Schedule() {
               <div
                 key={`${ev.date}-${i}`}
                 className={`flex items-center gap-4 rounded-xl px-4 py-3 ${
-                  isToday
-                    ? "bg-gray-800 text-white"
-                    : "bg-white/60 text-gray-800"
+                  isToday ? "" : "bg-white/60 text-gray-800"
                 }`}
+                style={isToday ? {
+                  backgroundColor: "var(--schedule-today-bg, #3B3B3B)",
+                  color: "var(--schedule-today-text, #FFFFFF)",
+                } : undefined}
               >
-                <span className={`font-bold min-w-[2em] text-center ${
-                  hasRange ? "text-base" : "text-xl"
-                } ${isToday ? "text-white" : "text-gray-700"}`}>
+                <span
+                  className={`font-bold min-w-[2em] text-center ${
+                    hasRange ? "text-base" : "text-xl"
+                  }`}
+                  style={isToday ? { color: "var(--schedule-today-text, #FFFFFF)" } : { color: "#374151" }}
+                >
                   {dayLabel}
                 </span>
                 <span className="text-sm font-medium truncate">{ev.name}</span>

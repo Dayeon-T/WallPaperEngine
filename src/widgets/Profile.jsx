@@ -28,7 +28,31 @@ export default function Profile() {
   }
 
   const name = user?.user_metadata?.name || "사용자"
-  const cols = links.length + 1
+  const allItems = [
+    ...links.map((link) => ({ type: "link", ...link })),
+    { type: "settings" },
+  ]
+  const needsTwoRows = allItems.length > 4
+  const row1 = needsTwoRows ? allItems.slice(0, 4) : allItems
+  const row2 = needsTwoRows ? allItems.slice(4) : []
+
+  const renderItem = (item, i) => (
+    <li key={i}>
+      {item.type === "settings" ? (
+        <a href="/settings"><span>설정</span></a>
+      ) : (
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault()
+            window.open(item.url, "_blank", "width=1200,height=800")
+          }}
+        >
+          <span>{item.name}</span>
+        </a>
+      )}
+    </li>
+  )
 
   return (
     <div className="bg-widjet rounded-2xl pt-7">
@@ -45,30 +69,24 @@ export default function Profile() {
         <p className="text-[clamp(1.2rem,2vw,2.25rem)] font-extrabold">{name} 선생님</p>
         <p className="text-[clamp(0.6rem,0.7vw,0.875rem)] text-muted mb-4">{user?.email}</p>
       </div>
-      <div className="flex flex-row gap-2 bg-btn rounded-b-2xl py-4">
+      <div className="flex flex-col bg-btn rounded-b-2xl py-3 gap-2">
         <ul
           className="grid w-full text-center text-sm divide-x divide-[#E5E5E5]"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${row1.length}, minmax(0, 1fr))` }}
         >
-          {links.map((link, i) => (
-            <li key={i}>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault()
-                  window.open(link.url, "_blank", "width=1200,height=800")
-                }}
-              >
-                <span>{link.name}</span>
-              </a>
-            </li>
-          ))}
-          <li>
-            <a href="/settings">
-              <span>설정</span>
-            </a>
-          </li>
+          {row1.map(renderItem)}
         </ul>
+        {row2.length > 0 && (
+          <>
+          <hr className="border-t border-[#E5E5E5] mx-4" />
+          <ul
+            className="grid w-full text-center text-sm divide-x divide-[#E5E5E5]"
+            style={{ gridTemplateColumns: `repeat(${row2.length}, minmax(0, 1fr))` }}
+          >
+            {row2.map(renderItem)}
+          </ul>
+          </>
+        )}
       </div>
     </div>
   )

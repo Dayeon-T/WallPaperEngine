@@ -39,6 +39,7 @@ function applyWidgetStyle(s) {
     "--widget-shadow", "--widget-backdrop", "--widget-btn-bg",
     "--widget-btn-text", "--todo-bg", "--todo-text",
     "--tt-header-bg", "--tt-today-bg", "--tt-empty-bg",
+    "--schedule-today-bg", "--schedule-today-text",
   ]
   if (!s) {
     vars.forEach(v => root.removeProperty(v))
@@ -57,6 +58,8 @@ function applyWidgetStyle(s) {
   if (s.ttHeaderBg) root.setProperty("--tt-header-bg", s.ttHeaderBg)
   if (s.ttTodayBg) root.setProperty("--tt-today-bg", s.ttTodayBg)
   if (s.ttEmptyBg) root.setProperty("--tt-empty-bg", s.ttEmptyBg)
+  if (s.scheduleTodayBg) root.setProperty("--schedule-today-bg", s.scheduleTodayBg)
+  if (s.scheduleTodayText) root.setProperty("--schedule-today-text", s.scheduleTodayText)
 }
 
 function App() {
