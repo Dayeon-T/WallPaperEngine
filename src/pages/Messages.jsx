@@ -15,6 +15,7 @@ import {
   fetchFriends,
 } from "../api/cheers"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
+import { fetchTimetableByUserId } from "../api/timetable"
 
 const PRESET_MESSAGES = [
   "오늘도 파이팅!",
@@ -34,6 +35,71 @@ function Avatar({ src, name, size = "w-10 h-10", textSize = "text-sm", className
       {(name || "?")[0]}
     </div>
   )
+}
+
+const DEFAULT_PERIOD_SCHEDULE = [
+  null,
+  { label: "1교시", start: "08:20", end: "09:10", enabled: true },
+  { label: "2교시", start: "09:20", end: "10:10", enabled: true },
+  { label: "3교시", start: "10:20", end: "11:10", enabled: true },
+  { label: "4교시", start: "11:20", end: "12:10", enabled: true },
+  { label: "점심시간", start: "12:10", end: "13:00", enabled: true },
+  { label: "5교시", start: "13:00", end: "13:50", enabled: true },
+  { label: "6교시", start: "14:00", end: "14:50", enabled: true },
+  { label: "7교시", start: "15:00", end: "15:50", enabled: true },
+]
+
+function timeToMin(str) {
+  const [h, m] = str.split(":").map(Number)
+  return h * 60 + m
+}
+
+function getNowStatus(entries, periodSchedule) {
+  const now = new Date()
+  const dayIndex = now.getDay()
+  if (dayIndex === 0 || dayIndex === 6) return { text: "주말", emoji: "🏖️" }
+
+  const schedule = periodSchedule || DEFAULT_PERIOD_SCHEDULE
+  const enabled = [null, ...schedule.slice(1).filter((p) => p?.enabled !== false)]
+  const current = now.getHours() * 60 + now.getMinutes()
+  const todayEntries = entries.filter((e) => e.day === dayIndex)
+
+  const dayStart = timeToMin(enabled[1].start)
+  const dayEnd = timeToMin(enabled[enabled.length - 1].end)
+
+  if (current < dayStart) return { text: "출근 전", emoji: "🌅" }
+  if (current >= dayEnd) return { text: "퇴근", emoji: "🏠" }
+
+  // 현재 교시 찾기
+  let activePeriod = null
+  for (let p = 1; p < enabled.length; p++) {
+    if (current >= timeToMin(enabled[p].start) && current < timeToMin(enabled[p].end)) {
+      activePeriod = p
+      break
+    }
+  }
+
+  // 쉬는 시간
+  if (!activePeriod) {
+    // 점심시간 체크
+    const lunch = enabled.find((p) => p?.label === "점심시간")
+    if (lunch && current >= timeToMin(lunch.start) && current < timeToMin(lunch.end)) {
+      return { text: "점심시간", emoji: "🍚" }
+    }
+    return { text: "쉬는 시간", emoji: "☕" }
+  }
+
+  // 점심시간
+  if (enabled[activePeriod].label === "점심시간") {
+    return { text: "점심시간", emoji: "🍚" }
+  }
+
+  // 수업 중인지 공강인지
+  const entry = todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+  if (entry && entry.subject) {
+    return { text: `${entry.subject} 수업 중`, emoji: "📚" }
+  }
+  return { text: `${enabled[activePeriod].label} 공강`, emoji: "✨" }
 }
 
 export default function Messages() {
@@ -60,6 +126,8 @@ export default function Messages() {
   const [friendSearching, setFriendSearching] = useState(false)
   const [friendMsg, setFriendMsg] = useState({ text: "", type: "" })
   const [codeCopied, setCodeCopied] = useState(false)
+  const [statusMap, setStatusMap] = useState({})
+  const [selectedStatus, setSelectedStatus] = useState(null)
   const chatEndRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -108,9 +176,32 @@ export default function Messages() {
       if (c.partnerAvatar) newMap[c.partnerId] = c.partnerAvatar
     }
     setAvatarMap((prev) => ({ ...prev, ...newMap }))
+    // 상대방 시간표 상태 로드
+    const newStatusMap = {}
+    for (const c of list) {
+      try {
+        const { data: tt } = await fetchTimetableByUserId(c.partnerId)
+        if (tt) newStatusMap[c.partnerId] = getNowStatus(tt, null)
+      } catch { /* 권한 없으면 무시 */ }
+    }
+    setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
   }, [user])
 
   useEffect(() => { loadConversations() }, [loadConversations])
+
+  // 1분마다 상태 갱신
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // statusMap의 키(partnerId)들에 대해 상태만 재계산
+      setStatusMap((prev) => {
+        const next = { ...prev }
+        // 재계산은 loadConversations에서 하므로 여기서는 트리거만
+        return next
+      })
+      loadConversations()
+    }, 60000)
+    return () => clearInterval(timer)
+  }, [loadConversations])
 
   // 동료 목록 (새 대화용)
   useEffect(() => {
@@ -174,7 +265,16 @@ export default function Messages() {
     setSelectedId(partnerId)
     setSelectedName(partnerName || "알 수 없음")
     setSelectedAvatar(avatarMap[partnerId] || null)
+    setSelectedStatus(statusMap[partnerId] || null)
     setShowNewChat(false)
+    // 상대 시간표 상태 로드
+    fetchTimetableByUserId(partnerId).then(({ data: tt }) => {
+      if (tt) {
+        const s = getNowStatus(tt, null)
+        setSelectedStatus(s)
+        setStatusMap((prev) => ({ ...prev, [partnerId]: s }))
+      }
+    }).catch(() => {})
     const { data } = await fetchConversation(user.id, partnerId)
     setMessages(data || [])
     // 안읽은 메시지 읽음 처리
@@ -552,6 +652,11 @@ export default function Messages() {
                         </span>
                         <span className="text-[11px] text-gray-400 shrink-0">{fmtPreview(lastMsg.created_at)}</span>
                       </div>
+                      {statusMap[c.partnerId] && (
+                        <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                          {statusMap[c.partnerId].emoji} {statusMap[c.partnerId].text}
+                        </p>
+                      )}
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="text-xs text-gray-400 truncate pr-2">
                           {isMine ? "나: " : ""}{lastMsg.message}
@@ -592,9 +697,14 @@ export default function Messages() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">{selectedName}</p>
-                  {onlineIds.has(selectedId) && (
-                    <p className="text-[11px] text-green-500">접속 중</p>
-                  )}
+                  <p className="text-[11px] text-gray-400">
+                    {selectedStatus && (
+                      <span className="mr-1.5">{selectedStatus.emoji} {selectedStatus.text}</span>
+                    )}
+                    {onlineIds.has(selectedId) && (
+                      <span className="text-green-500">· 접속 중</span>
+                    )}
+                  </p>
                 </div>
               </div>
 

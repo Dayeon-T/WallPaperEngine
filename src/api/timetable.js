@@ -20,6 +20,17 @@ export async function upsertTimetableEntry(entry) {
   return { data, error }
 }
 
+export async function fetchTimetableByUserId(userId) {
+  const { data, error } = await supabase
+    .from("timetable")
+    .select("*")
+    .eq("user_id", userId)
+    .order("day")
+    .order("start_period")
+
+  return { data, error }
+}
+
 export async function deleteTimetableEntry(id) {
   const { error } = await supabase
     .from("timetable")
