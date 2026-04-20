@@ -72,15 +72,22 @@ export default function Messages() {
   // 실시간 수신
   useEffect(() => {
     if (!user) return
-    const unsub = subscribeToCheer(user.id, (newMsg) => {
-      // 대화 목록 갱신
-      loadConversations()
-      // 현재 열린 대화에 추가
-      if (selectedId && newMsg.from_id === selectedId) {
-        setMessages((prev) => [...prev, newMsg])
-        markAsRead(newMsg.id)
-      }
-    })
+    const unsub = subscribeToCheer(
+      user.id,
+      (newMsg) => {
+        loadConversations()
+        if (selectedId && newMsg.from_id === selectedId) {
+          setMessages((prev) => [...prev, newMsg])
+          markAsRead(newMsg.id)
+        }
+      },
+      (readMsg) => {
+        // 상대가 내 메시지를 읽었을 때
+        setMessages((prev) =>
+          prev.map((m) => m.id === readMsg.id ? { ...m, is_read: true } : m)
+        )
+      },
+    )
     return unsub
   }, [user, selectedId, loadConversations])
 
@@ -402,11 +409,16 @@ export default function Messages() {
                               }`}>
                                 {m.message}
                               </div>
-                              {showTime && (
-                                <span className="text-[10px] text-gray-400 shrink-0 pb-0.5">
-                                  {fmtTime(m.created_at)}
-                                </span>
-                              )}
+                              <div className="flex flex-col items-end gap-0.5 shrink-0 pb-0.5">
+                                {isMine && !m.is_read && (
+                                  <span className="text-[10px] font-bold text-primary leading-none">1</span>
+                                )}
+                                {showTime && (
+                                  <span className="text-[10px] text-gray-400 leading-none">
+                                    {fmtTime(m.created_at)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>

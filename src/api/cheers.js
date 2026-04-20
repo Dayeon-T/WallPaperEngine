@@ -166,7 +166,7 @@ export function joinPresence(user) {
   }
 }
 
-export function subscribeToCheer(userId, onCheer) {
+export function subscribeToCheer(userId, onCheer, onRead) {
   const channel = supabase
     .channel("cheers:" + userId)
     .on(
@@ -178,6 +178,18 @@ export function subscribeToCheer(userId, onCheer) {
         filter: `to_id=eq.${userId}`,
       },
       (payload) => onCheer(payload.new),
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "cheers",
+        filter: `from_id=eq.${userId}`,
+      },
+      (payload) => {
+        if (payload.new.is_read && onRead) onRead(payload.new)
+      },
     )
     .subscribe()
 
