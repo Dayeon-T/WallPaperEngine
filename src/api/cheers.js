@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase"
 export async function fetchColleagues(atptCode, schoolCode, currentUserId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name")
+    .select("id, name, avatar_url")
     .eq("atpt_code", atptCode)
     .eq("school_code", schoolCode)
     .neq("id", currentUserId)
@@ -84,19 +84,19 @@ export async function fetchConversationList(userId) {
     }
   }
 
-  // 이름이 없는 상대방은 profiles 테이블에서 조회
-  const unknownIds = Object.values(map)
-    .filter((c) => !c.partnerName)
-    .map((c) => c.partnerId)
-
-  if (unknownIds.length > 0) {
+  // 모든 상대방의 이름과 아바타를 profiles 테이블에서 조회
+  const partnerIds = Object.keys(map)
+  if (partnerIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, name")
-      .in("id", unknownIds)
+      .select("id, name, avatar_url")
+      .in("id", partnerIds)
 
     for (const p of (profiles || [])) {
-      if (map[p.id]) map[p.id].partnerName = p.name
+      if (map[p.id]) {
+        if (!map[p.id].partnerName) map[p.id].partnerName = p.name
+        map[p.id].partnerAvatar = p.avatar_url || null
+      }
     }
   }
 

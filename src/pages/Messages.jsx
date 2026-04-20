@@ -9,6 +9,7 @@ import {
   joinPresence,
   subscribeToCheer,
 } from "../api/cheers"
+import { fetchProfileRow, uploadAvatar } from "../api/settings"
 
 const PRESET_MESSAGES = [
   "오늘도 파이팅!",
@@ -18,6 +19,17 @@ const PRESET_MESSAGES = [
   "힘내세요, 선생님!",
   "멋져요! 👏",
 ]
+
+function Avatar({ src, name, size = "w-10 h-10", textSize = "text-sm", className = "" }) {
+  if (src) {
+    return <img src={src} alt={name} className={`${size} rounded-full object-cover ${className}`} />
+  }
+  return (
+    <div className={`${size} rounded-full flex items-center justify-center ${textSize} font-bold ${className}`}>
+      {(name || "?")[0]}
+    </div>
+  )
+}
 
 export default function Messages() {
   const { user } = useAuth()
@@ -31,13 +43,43 @@ export default function Messages() {
   const [search, setSearch] = useState("")
   const [showNewChat, setShowNewChat] = useState(false)
   const [onlineIds, setOnlineIds] = useState(new Set())
+  const [myAvatar, setMyAvatar] = useState(null)
+  const [selectedAvatar, setSelectedAvatar] = useState(null)
+  const [avatarMap, setAvatarMap] = useState({})
+  const [uploading, setUploading] = useState(false)
   const chatEndRef = useRef(null)
+  const fileInputRef = useRef(null)
+
+  // 내 아바타 로드
+  useEffect(() => {
+    if (!user) return
+    ;(async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.avatar_url) setMyAvatar(data.avatar_url)
+    })()
+  }, [user])
+
+  // 아바타 업로드
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploading(true)
+    const { data, error } = await uploadAvatar(user.id, file)
+    if (!error && data) setMyAvatar(data)
+    setUploading(false)
+  }
 
   // 대화 목록 로드
   const loadConversations = useCallback(async () => {
     if (!user) return
     const list = await fetchConversationList(user.id)
     setConversations(list)
+    // 아바타 맵 구성
+    const newMap = {}
+    for (const c of list) {
+      if (c.partnerAvatar) newMap[c.partnerId] = c.partnerAvatar
+    }
+    setAvatarMap((prev) => ({ ...prev, ...newMap }))
   }, [user])
 
   useEffect(() => { loadConversations() }, [loadConversations])
@@ -49,7 +91,14 @@ export default function Messages() {
     if (!meta.atpt_code || !meta.school_code) return
     ;(async () => {
       const { data } = await fetchColleagues(meta.atpt_code, meta.school_code, user.id)
-      if (data) setColleagues(data)
+      if (data) {
+        setColleagues(data)
+        const newMap = {}
+        for (const c of data) {
+          if (c.avatar_url) newMap[c.id] = c.avatar_url
+        }
+        setAvatarMap((prev) => ({ ...prev, ...newMap }))
+      }
     })()
   }, [user])
 
@@ -96,6 +145,7 @@ export default function Messages() {
     if (!user) return
     setSelectedId(partnerId)
     setSelectedName(partnerName || "알 수 없음")
+    setSelectedAvatar(avatarMap[partnerId] || null)
     setShowNewChat(false)
     const { data } = await fetchConversation(user.id, partnerId)
     setMessages(data || [])
@@ -195,8 +245,8 @@ export default function Messages() {
       <div className="col-span-3 flex bg-white rounded-2xl overflow-hidden shadow-sm">
         {/* 왼쪽: 대화 목록 */}
         <div className="w-72 shrink-0 border-r border-gray-100 flex flex-col">
-          {/* 헤더 */}
-          <div className="p-4 pb-3 shrink-0">
+          {/* 내 프로필 */}
+          <div className="px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <a href="/" className="text-lg font-black">DASHBOARD</a>
               <button
@@ -210,6 +260,44 @@ export default function Messages() {
                   <line x1="9" y1="11" x2="15" y2="11"/>
                 </svg>
               </button>
+            </div>
+            <div className="flex items-center gap-3 mb-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="relative group shrink-0"
+                title="프로필 사진 변경"
+              >
+                {myAvatar ? (
+                  <img src={myAvatar} alt="내 프로필" className="w-11 h-11 rounded-full object-cover" />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">
+                    {(user.user_metadata?.name || "?")[0]}
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </div>
+                {uploading && (
+                  <div className="absolute inset-0 rounded-full bg-white/60 flex items-center justify-center">
+                    <span className="text-[10px] text-gray-500">...</span>
+                  </div>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 truncate">{user.user_metadata?.name || "나"}</p>
+                <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+              </div>
             </div>
             {/* 검색 */}
             <div className="relative">
@@ -243,9 +331,7 @@ export default function Messages() {
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition text-left"
                       >
                         <div className="relative">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-                            {c.name[0]}
-                          </div>
+                          <Avatar src={avatarMap[c.id]} name={c.name} className="bg-primary/10 text-primary" />
                           {isOnline && (
                             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
                           )}
@@ -281,11 +367,11 @@ export default function Messages() {
                     }`}
                   >
                     <div className="relative">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                        isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-500"
-                      }`}>
-                        {(c.partnerName || "?")[0]}
-                      </div>
+                      <Avatar
+                        src={c.partnerAvatar || avatarMap[c.partnerId]}
+                        name={c.partnerName}
+                        className={isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-500"}
+                      />
                       {isOnline && (
                         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 ${
                           isActive ? "border-primary/5" : "border-white"
@@ -332,9 +418,7 @@ export default function Messages() {
               {/* 채팅 헤더 */}
               <div className="shrink-0 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-                    {(selectedName || "?")[0]}
-                  </div>
+                  <Avatar src={selectedAvatar} name={selectedName} size="w-9 h-9" className="bg-primary/10 text-primary" />
                   {onlineIds.has(selectedId) && (
                     <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-400 border-2 border-white" />
                   )}
@@ -391,9 +475,7 @@ export default function Messages() {
                           {!isMine && (
                             <div className="w-8 mr-2 shrink-0">
                               {showAvatar && (
-                                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                                  {(selectedName || "?")[0]}
-                                </div>
+                                <Avatar src={selectedAvatar} name={selectedName} size="w-8 h-8" textSize="text-xs" className="bg-primary/10 text-primary" />
                               )}
                             </div>
                           )}
