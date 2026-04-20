@@ -57,6 +57,11 @@ const SECTIONS = [
 
 const CHANGELOGS = [
   {
+    date: "2026.04.20",
+    changes: [
+      "각종 기능이 업데이트되었어요.", 
+    ],
+    
     date: "2026.04.08",
     changes: [
       "폴더 위젯의 이름을 설정에서 자유롭게 변경할 수 있어요.",
