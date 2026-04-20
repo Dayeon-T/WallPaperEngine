@@ -166,6 +166,71 @@ export function joinPresence(user) {
   }
 }
 
+/* ───── 친구 관련 ───── */
+
+export async function fetchMyFriendCode(userId) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("friend_code")
+    .eq("id", userId)
+    .single()
+  return data?.friend_code || null
+}
+
+export async function searchByFriendCode(code) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, name, avatar_url, friend_code")
+    .eq("friend_code", code.toUpperCase().trim())
+    .single()
+  return { data, error }
+}
+
+export async function addFriend(userId, friendId) {
+  const { error } = await supabase
+    .from("friends")
+    .insert({ user_id: userId, friend_id: friendId })
+  return { error }
+}
+
+export async function removeFriend(userId, friendId) {
+  const { error } = await supabase
+    .from("friends")
+    .delete()
+    .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`)
+  return { error }
+}
+
+export async function fetchFriends(userId) {
+  // 내가 추가한 친구
+  const { data: sent } = await supabase
+    .from("friends")
+    .select("friend_id")
+    .eq("user_id", userId)
+
+  // 나를 추가한 친구
+  const { data: received } = await supabase
+    .from("friends")
+    .select("user_id")
+    .eq("friend_id", userId)
+
+  const friendIds = [
+    ...new Set([
+      ...(sent || []).map((r) => r.friend_id),
+      ...(received || []).map((r) => r.user_id),
+    ]),
+  ]
+
+  if (friendIds.length === 0) return []
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, name, avatar_url")
+    .in("id", friendIds)
+
+  return profiles || []
+}
+
 export function subscribeToCheer(userId, onCheer, onRead) {
   const channel = supabase
     .channel("cheers:" + userId)
