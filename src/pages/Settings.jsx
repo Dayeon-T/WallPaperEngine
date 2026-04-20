@@ -57,11 +57,24 @@ const SECTIONS = [
 
 const CHANGELOGS = [
   {
+    date: "2026.04.21",
+    changes: [
+      "쪽지함이 카카오톡 스타일 대화형 UI로 새롭게 바뀌었어요.",
+      "쪽지 읽음 표시가 추가되었어요. (카카오톡 '1' 스타일)",
+      "쪽지함에서 프로필 사진을 업로드하고 표시할 수 있어요.",
+      "친구 코드로 다른 학교 선생님을 찾아 친구 추가할 수 있어요.",
+      "친구의 현재 시간표 상태가 표시돼요. (수학 3교시, 공강, 점심시간 등)",
+      "쉬는 시간에 다음 교시 과목을 미리 확인할 수 있어요.",
+      "오늘 수업이 없는 친구도 상태가 표시돼요. (오늘 수업 없음 🎉)",
+    ],
+  },
+  {
     date: "2026.04.20",
     changes: [
-      "각종 기능이 업데이트되었어요.", 
+      "각종 기능이 업데이트되었어요.",
     ],
-    
+  },
+  {
     date: "2026.04.08",
     changes: [
       "폴더 위젯의 이름을 설정에서 자유롭게 변경할 수 있어요.",
@@ -77,7 +90,6 @@ const CHANGELOGS = [
   {
     date: "2026.04.07",
     changes: [
-      
       "할 일에 중요도 표시, 마감일, D-Day, 정렬, 수정 기능이 추가되었어요.",
       "타이머 시간을 클릭해서 직접 설정할 수 있어요.",
       "같은 학교 동료에게 응원 메시지를 보낼 수 있어요.",
@@ -87,7 +99,6 @@ const CHANGELOGS = [
       "가로/세로 모니터에 맞는 레이아웃을 선택할 수 있어요.",
       "주간 리포트에서 이번 주 완료한 할 일을 확인할 수 있어요.",
       "기능 보기 버튼과 업데이트 내역 페이지가 추가되었어요.",
-      
     ],
   },
   {
@@ -1815,16 +1826,27 @@ function WeeklyReportSection({ user }) {
 }
 
 /* ───────── 섹션: 업데이트 내역 ───────── */
+const CHANGELOG_PER_PAGE = 3
+
 function ChangelogSection() {
+  const [page, setPage] = useState(0)
+  const totalPages = Math.ceil(CHANGELOGS.length / CHANGELOG_PER_PAGE)
+  const paged = CHANGELOGS.slice(page * CHANGELOG_PER_PAGE, (page + 1) * CHANGELOG_PER_PAGE)
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-1">업데이트 내역</h2>
       <p className="text-sm text-gray-400 mb-8">새로운 기능과 변경 사항을 확인하세요.</p>
 
       <div className="max-w-lg flex flex-col gap-6">
-        {CHANGELOGS.map((log, i) => (
-          <div key={i} className="relative pl-6 border-l-2 border-gray-200">
-            <div className="absolute -left-[7px] top-0.5 w-3 h-3 rounded-full bg-primary" />
+        {paged.map((log, i) => (
+          <div key={page * CHANGELOG_PER_PAGE + i} className="relative pl-6 border-l-2 border-gray-200">
+            <div className={`absolute -left-[7px] top-0.5 w-3 h-3 rounded-full ${
+              page === 0 && i === 0 ? "bg-primary ring-4 ring-primary/20" : "bg-primary"
+            }`} />
+            {page === 0 && i === 0 && (
+              <span className="absolute -left-[3px] top-5 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">NEW</span>
+            )}
             <p className="text-sm font-bold mb-2">{log.date}</p>
             <ul className="flex flex-col gap-1.5">
               {log.changes.map((change, j) => (
@@ -1837,7 +1859,39 @@ function ChangelogSection() {
           </div>
         ))}
       </div>
-      
+
+      {/* 페이지네이션 */}
+      {totalPages > 1 && (
+        <div className="max-w-lg flex items-center justify-center gap-2 mt-8">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setPage(i)}
+              className={`w-8 h-8 rounded-lg text-sm font-medium transition ${
+                page === i
+                  ? "bg-primary text-white"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page === totalPages - 1}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
