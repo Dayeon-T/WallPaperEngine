@@ -54,21 +54,33 @@ function timeToMin(str) {
   return h * 60 + m
 }
 
-function getNowStatus(entries, periodSchedule) {
+function getNowStatus(entries) {
+  if (!entries || entries.length === 0) return null // 시간표 없으면 표시 안 함
+
   const now = new Date()
   const dayIndex = now.getDay()
   if (dayIndex === 0 || dayIndex === 6) return { text: "주말", emoji: "🏖️" }
 
-  const schedule = periodSchedule || DEFAULT_PERIOD_SCHEDULE
+  const schedule = DEFAULT_PERIOD_SCHEDULE
   const enabled = [null, ...schedule.slice(1).filter((p) => p?.enabled !== false)]
   const current = now.getHours() * 60 + now.getMinutes()
   const todayEntries = entries.filter((e) => e.day === dayIndex)
 
-  const dayStart = timeToMin(enabled[1].start)
-  const dayEnd = timeToMin(enabled[enabled.length - 1].end)
+  // 오늘 수업이 없으면 표시 안 함
+  if (todayEntries.length === 0) return null
 
-  if (current < dayStart) return { text: "출근 전", emoji: "🌅" }
-  if (current >= dayEnd) return { text: "퇴근", emoji: "🏠" }
+  // 이 사람의 오늘 마지막 수업 기준으로 끝 시간 결정
+  const lastPeriod = Math.max(...todayEntries.map((e) => e.end_period ?? e.start_period))
+  const lastSlot = schedule[lastPeriod]
+  const dayEnd = lastSlot ? timeToMin(lastSlot.end) : timeToMin(enabled[enabled.length - 1].end)
+
+  // 이 사람의 오늘 첫 수업 기준으로 시작 시간 결정
+  const firstPeriod = Math.min(...todayEntries.map((e) => e.start_period))
+  const firstSlot = schedule[firstPeriod]
+  const dayStart = firstSlot ? timeToMin(firstSlot.start) : timeToMin(enabled[1].start)
+
+  if (current < dayStart) return { text: "수업 전", emoji: "🌅" }
+  if (current >= dayEnd) return { text: "수업 끝", emoji: "✅" }
 
   // 현재 교시 찾기
   let activePeriod = null
@@ -81,7 +93,6 @@ function getNowStatus(entries, periodSchedule) {
 
   // 쉬는 시간
   if (!activePeriod) {
-    // 점심시간 체크
     const lunch = enabled.find((p) => p?.label === "점심시간")
     if (lunch && current >= timeToMin(lunch.start) && current < timeToMin(lunch.end)) {
       return { text: "점심시간", emoji: "🍚" }
@@ -181,7 +192,7 @@ export default function Messages() {
     for (const c of list) {
       try {
         const { data: tt } = await fetchTimetableByUserId(c.partnerId)
-        if (tt) newStatusMap[c.partnerId] = getNowStatus(tt, null)
+        if (tt) newStatusMap[c.partnerId] = getNowStatus(tt)
       } catch { /* 권한 없으면 무시 */ }
     }
     setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
@@ -270,7 +281,7 @@ export default function Messages() {
     // 상대 시간표 상태 로드
     fetchTimetableByUserId(partnerId).then(({ data: tt }) => {
       if (tt) {
-        const s = getNowStatus(tt, null)
+        const s = getNowStatus(tt)
         setSelectedStatus(s)
         setStatusMap((prev) => ({ ...prev, [partnerId]: s }))
       }
