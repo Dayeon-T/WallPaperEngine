@@ -97,6 +97,20 @@ function getNowStatus(entries) {
     if (lunch && current >= timeToMin(lunch.start) && current < timeToMin(lunch.end)) {
       return { text: "점심시간", emoji: "🍚" }
     }
+    // 쉬는 시간일 때 다음 교시 정보 표시
+    let nextPeriodIdx = null
+    for (let p = 1; p < enabled.length; p++) {
+      if (enabled[p] && timeToMin(enabled[p].start) > current) {
+        nextPeriodIdx = p
+        break
+      }
+    }
+    if (nextPeriodIdx) {
+      const nextEntry = todayEntries.find((e) => nextPeriodIdx >= e.start_period && nextPeriodIdx <= e.end_period)
+      if (nextEntry && nextEntry.subject) {
+        return { text: `쉬는 시간 → ${nextEntry.subject} ${enabled[nextPeriodIdx].label}`, emoji: "☕" }
+      }
+    }
     return { text: "쉬는 시간", emoji: "☕" }
   }
 
@@ -105,10 +119,10 @@ function getNowStatus(entries) {
     return { text: "점심시간", emoji: "🍚" }
   }
 
-  // 수업 중인지 공강인지
+  // 수업 중인지 공강인지 - 과목명 + 교시 표시
   const entry = todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
   if (entry && entry.subject) {
-    return { text: `${entry.subject} 수업 중`, emoji: "📚" }
+    return { text: `${entry.subject} ${enabled[activePeriod].label}`, emoji: "📚" }
   }
   return { text: `${enabled[activePeriod].label} 공강`, emoji: "✨" }
 }
@@ -152,7 +166,7 @@ export default function Messages() {
     })()
   }, [user])
 
-  // 친구 목록 로드
+  // 친구 목록 로드 + 친구 시간표 상태도 로드
   const loadFriends = useCallback(async () => {
     if (!user) return
     const list = await fetchFriends(user.id)
@@ -162,6 +176,20 @@ export default function Messages() {
       if (f.avatar_url) newMap[f.id] = f.avatar_url
     }
     setAvatarMap((prev) => ({ ...prev, ...newMap }))
+    // 친구 시간표 상태 로드
+    const newStatusMap = {}
+    for (const f of list) {
+      try {
+        const { data: tt } = await fetchTimetableByUserId(f.id)
+        if (tt) {
+          const s = getNowStatus(tt)
+          if (s) newStatusMap[f.id] = s
+        }
+      } catch { /* 권한 없으면 무시 */ }
+    }
+    if (Object.keys(newStatusMap).length > 0) {
+      setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
+    }
   }, [user])
 
   useEffect(() => { loadFriends() }, [loadFriends])
@@ -217,7 +245,7 @@ export default function Messages() {
     return () => clearInterval(timer)
   }, [loadConversations])
 
-  // 동료 목록 (새 대화용)
+  // 동료 목록 (새 대화용) + 시간표 상태 로드
   useEffect(() => {
     if (!user) return
     const meta = user.user_metadata || {}
@@ -231,6 +259,20 @@ export default function Messages() {
           if (c.avatar_url) newMap[c.id] = c.avatar_url
         }
         setAvatarMap((prev) => ({ ...prev, ...newMap }))
+        // 동료 시간표 상태도 로드
+        const newStatusMap = {}
+        for (const c of data) {
+          try {
+            const { data: tt } = await fetchTimetableByUserId(c.id)
+            if (tt) {
+              const s = getNowStatus(tt)
+              if (s) newStatusMap[c.id] = s
+            }
+          } catch { /* 권한 없으면 무시 */ }
+        }
+        if (Object.keys(newStatusMap).length > 0) {
+          setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
+        }
       }
     })()
   }, [user])
@@ -602,10 +644,17 @@ export default function Messages() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                            <p className="text-[11px] text-gray-400">
-                              {c.source === "friend" ? "친구" : "같은 학교"}
-                              {hasConvo ? " · 대화 있음" : ""}
-                            </p>
+                            {statusMap[c.id] ? (
+                              <p className="text-[11px] text-gray-400 truncate">
+                                {statusMap[c.id].emoji} {statusMap[c.id].text}
+                                <span className="text-gray-300"> · {c.source === "friend" ? "친구" : "같은 학교"}</span>
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-gray-400">
+                                {c.source === "friend" ? "친구" : "같은 학교"}
+                                {hasConvo ? " · 대화 있음" : ""}
+                              </p>
+                            )}
                           </div>
                         </button>
                         {isFriend && c.source === "friend" && (
