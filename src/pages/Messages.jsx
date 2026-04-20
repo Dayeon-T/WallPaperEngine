@@ -8,6 +8,11 @@ import {
   markAsRead,
   joinPresence,
   subscribeToCheer,
+  fetchMyFriendCode,
+  searchByFriendCode,
+  addFriend,
+  removeFriend,
+  fetchFriends,
 } from "../api/cheers"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
 
@@ -44,20 +49,43 @@ export default function Messages() {
   const [showNewChat, setShowNewChat] = useState(false)
   const [onlineIds, setOnlineIds] = useState(new Set())
   const [myAvatar, setMyAvatar] = useState(null)
+  const [myFriendCode, setMyFriendCode] = useState("")
   const [selectedAvatar, setSelectedAvatar] = useState(null)
   const [avatarMap, setAvatarMap] = useState({})
   const [uploading, setUploading] = useState(false)
+  const [friends, setFriends] = useState([])
+  const [showAddFriend, setShowAddFriend] = useState(false)
+  const [friendCodeInput, setFriendCodeInput] = useState("")
+  const [friendSearchResult, setFriendSearchResult] = useState(null)
+  const [friendSearching, setFriendSearching] = useState(false)
+  const [friendMsg, setFriendMsg] = useState({ text: "", type: "" })
+  const [codeCopied, setCodeCopied] = useState(false)
   const chatEndRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  // 내 아바타 로드
+  // 내 프로필 로드 (아바타 + 친구코드)
   useEffect(() => {
     if (!user) return
     ;(async () => {
       const { data } = await fetchProfileRow(user.id)
       if (data?.avatar_url) setMyAvatar(data.avatar_url)
+      if (data?.friend_code) setMyFriendCode(data.friend_code)
     })()
   }, [user])
+
+  // 친구 목록 로드
+  const loadFriends = useCallback(async () => {
+    if (!user) return
+    const list = await fetchFriends(user.id)
+    setFriends(list)
+    const newMap = {}
+    for (const f of list) {
+      if (f.avatar_url) newMap[f.id] = f.avatar_url
+    }
+    setAvatarMap((prev) => ({ ...prev, ...newMap }))
+  }, [user])
+
+  useEffect(() => { loadFriends() }, [loadFriends])
 
   // 아바타 업로드
   const handleAvatarUpload = async (e) => {
@@ -228,14 +256,70 @@ export default function Messages() {
       )
     : conversations
 
-  // 새 대화 목록 (기존 대화가 없는 동료만)
+  // 새 대화 목록 (같은 학교 동료 + 친구 합치기, 중복 제거)
   const existingPartnerIds = new Set(conversations.map((c) => c.partnerId))
-  const newChatColleagues = showNewChat
-    ? colleagues.filter((c) => {
-        if (search.trim()) return c.name.toLowerCase().includes(search.trim().toLowerCase())
-        return true
-      })
-    : []
+  const allContacts = showNewChat ? (() => {
+    const map = new Map()
+    for (const c of colleagues) map.set(c.id, { ...c, source: "school" })
+    for (const f of friends) {
+      if (!map.has(f.id)) map.set(f.id, { ...f, name: f.name, source: "friend" })
+    }
+    let list = [...map.values()]
+    if (search.trim()) {
+      const kw = search.trim().toLowerCase()
+      list = list.filter((c) => c.name.toLowerCase().includes(kw))
+    }
+    return list
+  })() : []
+
+  // 친구 코드로 검색
+  const handleFriendSearch = async () => {
+    const code = friendCodeInput.trim().toUpperCase()
+    if (!code || code.length < 4) {
+      setFriendMsg({ text: "코드를 정확히 입력해주세요.", type: "error" })
+      return
+    }
+    if (code === myFriendCode) {
+      setFriendMsg({ text: "본인의 코드는 추가할 수 없어요.", type: "error" })
+      return
+    }
+    setFriendSearching(true)
+    setFriendSearchResult(null)
+    const { data, error } = await searchByFriendCode(code)
+    setFriendSearching(false)
+    if (error || !data) {
+      setFriendMsg({ text: "해당 코드의 선생님을 찾을 수 없어요.", type: "error" })
+    } else if (data.id === user.id) {
+      setFriendMsg({ text: "본인의 코드입니다.", type: "error" })
+    } else {
+      setFriendSearchResult(data)
+      setFriendMsg({ text: "", type: "" })
+    }
+  }
+
+  const handleAddFriend = async (friendId) => {
+    const { error } = await addFriend(user.id, friendId)
+    if (error) {
+      if (error.code === "23505") setFriendMsg({ text: "이미 추가된 친구입니다.", type: "error" })
+      else setFriendMsg({ text: "추가에 실패했어요.", type: "error" })
+    } else {
+      setFriendMsg({ text: "친구가 추가되었습니다!", type: "success" })
+      setFriendSearchResult(null)
+      setFriendCodeInput("")
+      loadFriends()
+    }
+  }
+
+  const handleRemoveFriend = async (friendId) => {
+    await removeFriend(user.id, friendId)
+    loadFriends()
+  }
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(myFriendCode)
+    setCodeCopied(true)
+    setTimeout(() => setCodeCopied(false), 2000)
+  }
 
   if (!user) return null
 
@@ -294,11 +378,76 @@ export default function Messages() {
                 onChange={handleAvatarUpload}
                 className="hidden"
               />
-              <div className="min-w-0">
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-gray-900 truncate">{user.user_metadata?.name || "나"}</p>
-                <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                {myFriendCode && (
+                  <button
+                    onClick={handleCopyCode}
+                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-primary transition"
+                    title="클릭하여 복사"
+                  >
+                    <span className="font-mono">{myFriendCode}</span>
+                    <span>{codeCopied ? "복사됨!" : "복사"}</span>
+                  </button>
+                )}
               </div>
+              <button
+                onClick={() => { setShowAddFriend(!showAddFriend); setFriendSearchResult(null); setFriendCodeInput(""); setFriendMsg({ text: "", type: "" }) }}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition shrink-0 ${
+                  showAddFriend ? "bg-primary text-white" : "text-gray-400 hover:bg-gray-100"
+                }`}
+                title="친구 추가"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/>
+                  <circle cx="8.5" cy="7" r="4"/>
+                  <line x1="20" y1="8" x2="20" y2="14"/>
+                  <line x1="23" y1="11" x2="17" y2="11"/>
+                </svg>
+              </button>
             </div>
+
+            {/* 친구 추가 패널 */}
+            {showAddFriend && (
+              <div className="mb-3 p-3 bg-gray-50 rounded-xl">
+                <p className="text-xs font-semibold text-gray-500 mb-2">친구 코드로 추가</p>
+                <div className="flex gap-1.5">
+                  <input
+                    className="flex-1 h-8 rounded-lg border border-gray-200 px-3 text-sm font-mono uppercase outline-none focus:border-primary text-center tracking-widest"
+                    placeholder="코드 입력"
+                    value={friendCodeInput}
+                    onChange={(e) => setFriendCodeInput(e.target.value.toUpperCase().slice(0, 6))}
+                    onKeyDown={(e) => e.key === "Enter" && handleFriendSearch()}
+                    maxLength={6}
+                  />
+                  <button
+                    onClick={handleFriendSearch}
+                    disabled={friendSearching || friendCodeInput.trim().length < 4}
+                    className="h-8 px-3 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 transition disabled:opacity-40 shrink-0"
+                  >
+                    {friendSearching ? "..." : "검색"}
+                  </button>
+                </div>
+                {friendMsg.text && (
+                  <p className={`text-[11px] mt-1.5 ${friendMsg.type === "error" ? "text-red-500" : "text-green-500"}`}>
+                    {friendMsg.text}
+                  </p>
+                )}
+                {friendSearchResult && (
+                  <div className="mt-2 flex items-center gap-2 p-2 bg-white rounded-lg">
+                    <Avatar src={friendSearchResult.avatar_url} name={friendSearchResult.name} size="w-8 h-8" textSize="text-xs" className="bg-primary/10 text-primary" />
+                    <span className="text-sm font-medium flex-1 truncate">{friendSearchResult.name}</span>
+                    <button
+                      onClick={() => handleAddFriend(friendSearchResult.id)}
+                      className="h-7 px-2.5 rounded-lg bg-primary text-white text-[11px] font-semibold hover:opacity-90 transition shrink-0"
+                    >
+                      추가
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 검색 */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -316,31 +465,49 @@ export default function Messages() {
             {showNewChat ? (
               <div>
                 <p className="px-4 py-2 text-xs font-semibold text-gray-400">새 대화 시작</p>
-                {newChatColleagues.length === 0 ? (
+                {allContacts.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-gray-400 text-center">
-                    {colleagues.length === 0 ? "같은 학교 선생님이 없습니다." : "검색 결과가 없어요."}
+                    {colleagues.length === 0 && friends.length === 0 ? "선생님 목록이 없습니다." : "검색 결과가 없어요."}
                   </p>
                 ) : (
-                  newChatColleagues.map((c) => {
+                  allContacts.map((c) => {
                     const isOnline = onlineIds.has(c.id)
                     const hasConvo = existingPartnerIds.has(c.id)
+                    const isFriend = friends.some((f) => f.id === c.id)
                     return (
-                      <button
-                        key={c.id}
-                        onClick={() => startNewChat(c)}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition text-left"
-                      >
-                        <div className="relative">
-                          <Avatar src={avatarMap[c.id]} name={c.name} className="bg-primary/10 text-primary" />
-                          {isOnline && (
-                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                          {hasConvo && <p className="text-xs text-gray-400">기존 대화 있음</p>}
-                        </div>
-                      </button>
+                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition">
+                        <button
+                          onClick={() => startNewChat(c)}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                        >
+                          <div className="relative">
+                            <Avatar src={c.avatar_url || avatarMap[c.id]} name={c.name} className="bg-primary/10 text-primary" />
+                            {isOnline && (
+                              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                            <p className="text-[11px] text-gray-400">
+                              {c.source === "friend" ? "친구" : "같은 학교"}
+                              {hasConvo ? " · 대화 있음" : ""}
+                            </p>
+                          </div>
+                        </button>
+                        {isFriend && c.source === "friend" && (
+                          <button
+                            onClick={() => handleRemoveFriend(c.id)}
+                            className="text-[11px] text-gray-300 hover:text-red-400 transition shrink-0 px-1"
+                            title="친구 삭제"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/>
+                              <circle cx="8.5" cy="7" r="4"/>
+                              <line x1="18" y1="11" x2="23" y2="11"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     )
                   })
                 )}
