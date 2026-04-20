@@ -66,8 +66,8 @@ function getNowStatus(entries) {
   const current = now.getHours() * 60 + now.getMinutes()
   const todayEntries = entries.filter((e) => e.day === dayIndex)
 
-  // 오늘 수업이 없으면 표시 안 함
-  if (todayEntries.length === 0) return null
+  // 오늘 수업이 없으면
+  if (todayEntries.length === 0) return { text: "오늘 수업 없음", emoji: "🎉" }
 
   // 이 사람의 오늘 마지막 수업 기준으로 끝 시간 결정
   const lastPeriod = Math.max(...todayEntries.map((e) => e.end_period ?? e.start_period))
@@ -192,7 +192,10 @@ export default function Messages() {
     for (const c of list) {
       try {
         const { data: tt } = await fetchTimetableByUserId(c.partnerId)
-        if (tt) newStatusMap[c.partnerId] = getNowStatus(tt)
+        if (tt) {
+          const s = getNowStatus(tt)
+          if (s) newStatusMap[c.partnerId] = s
+        }
       } catch { /* 권한 없으면 무시 */ }
     }
     setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
