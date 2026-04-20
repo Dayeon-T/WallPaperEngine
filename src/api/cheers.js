@@ -84,6 +84,22 @@ export async function fetchConversationList(userId) {
     }
   }
 
+  // 이름이 없는 상대방은 profiles 테이블에서 조회
+  const unknownIds = Object.values(map)
+    .filter((c) => !c.partnerName)
+    .map((c) => c.partnerId)
+
+  if (unknownIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .in("id", unknownIds)
+
+    for (const p of (profiles || [])) {
+      if (map[p.id]) map[p.id].partnerName = p.name
+    }
+  }
+
   // 최신 메시지 순 정렬
   return Object.values(map).sort(
     (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at)
