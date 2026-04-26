@@ -44,7 +44,7 @@ function getCalendarGrid(year, month) {
   const startDate = new Date(first)
   startDate.setDate(startDate.getDate() - startDayOfWeek)
   const days = []
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < 35; i++) {
     const d = new Date(startDate)
     d.setDate(d.getDate() + i)
     days.push(d)
@@ -98,7 +98,7 @@ export default function Schedule() {
         const gridStart = new Date(year, month, 1)
         gridStart.setDate(1 - gridStart.getDay())
         const gridEnd = new Date(gridStart)
-        gridEnd.setDate(gridEnd.getDate() + 41)
+        gridEnd.setDate(gridEnd.getDate() + 34)
         fromStr = formatYmd(gridStart)
         toStr = formatYmd(gridEnd)
         label = `${year}년 ${month + 1}월`
@@ -294,7 +294,7 @@ export default function Schedule() {
           {error && <p className="text-sm text-muted">{error}</p>}
 
           {!loading && !error && (
-            <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1 min-h-0">
+            <div className="grid grid-cols-7 grid-rows-5 gap-1 flex-1 min-h-0">
               {calendarDays.map((d, i) => {
                 const dStr = formatYmd(d)
                 const isCurrentMonth = d.getMonth() === currentMonthInfo.month
