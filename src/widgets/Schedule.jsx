@@ -216,32 +216,30 @@ export default function Schedule() {
   return (
     <div className="h-full bg-widjet rounded-2xl p-7 flex flex-col min-h-0">
       <div className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <p className="text-[clamp(0.9rem,1vw,1.25rem)] font-semibold">학사일정</p>
-          <div className="flex items-center gap-1 ml-1">
-            <button
-              onClick={() => { setViewMode("week"); setWeekOffset(0) }}
-              className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
-                viewMode === "week" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
-              }`}
-            >
-              주간
-            </button>
-            <button
-              onClick={() => { setViewMode("month"); setMonthOffset(0) }}
-              className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
-                viewMode === "month" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
-              }`}
-            >
-              월간
-            </button>
-          </div>
-        </div>
+        <p className="text-[clamp(0.9rem,1vw,1.25rem)] font-semibold">학사일정</p>
         <div className="flex items-center gap-3 text-sm">
           <button onClick={handlePrev} className="hover:opacity-60 transition-opacity">◀</button>
           <span className="min-w-[6em] text-center font-medium">{periodLabel}</span>
           <button onClick={handleNext} className="hover:opacity-60 transition-opacity">▶</button>
         </div>
+      </div>
+      <div className="flex items-center gap-1 mt-2 shrink-0">
+        <button
+          onClick={() => { setViewMode("week"); setWeekOffset(0) }}
+          className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
+            viewMode === "week" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
+          }`}
+        >
+          주간
+        </button>
+        <button
+          onClick={() => { setViewMode("month"); setMonthOffset(0) }}
+          className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
+            viewMode === "month" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
+          }`}
+        >
+          월간
+        </button>
       </div>
 
       {viewMode === "week" && (
