@@ -324,6 +324,21 @@ export default function Messages() {
     setSelectedId(partnerId)
     setSelectedName(partnerName || "알 수 없음")
     setSelectedAvatar(avatarMap[partnerId] || null)
+    // avatarMap에 없으면 DB에서 직접 조회
+    if (!avatarMap[partnerId]) {
+      try {
+        const { supabase } = await import("../lib/supabase")
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", partnerId)
+          .single()
+        if (p?.avatar_url) {
+          setSelectedAvatar(p.avatar_url)
+          setAvatarMap((prev) => ({ ...prev, [partnerId]: p.avatar_url }))
+        }
+      } catch {}
+    }
     setSelectedStatus(statusMap[partnerId] || null)
     setShowNewChat(false)
     // 상대 시간표 상태 로드
@@ -346,7 +361,7 @@ export default function Messages() {
     setConversations((prev) =>
       prev.map((c) => c.partnerId === partnerId ? { ...c, unread: 0 } : c)
     )
-  }, [user])
+  }, [user, avatarMap])
 
   // 스크롤 맨 아래
   useEffect(() => {
