@@ -796,7 +796,9 @@ export default function Messages() {
                     const isMine = m.from_id === user.id
                     const prevMsg = messages[i - 1]
                     const showDate = !prevMsg || getDateKey(m.created_at) !== getDateKey(prevMsg.created_at)
-                    const showAvatar = !isMine && (!prevMsg || prevMsg.from_id !== m.from_id || showDate)
+                    const isFirstOfGroup = !prevMsg || prevMsg.from_id !== m.from_id || showDate
+                    const showAvatar = !isMine && isFirstOfGroup
+                    const showMyAvatar = isMine && isFirstOfGroup
                     // 시간 표시: 같은 사람이 연속으로 보낸 경우 마지막만
                     const nextMsg = messages[i + 1]
                     const showTime = !nextMsg ||
@@ -813,7 +815,7 @@ export default function Messages() {
                             </span>
                           </div>
                         )}
-                        <div className={`flex ${isMine ? "justify-end" : "justify-start"} ${showAvatar ? "mt-3" : "mt-0.5"}`}>
+                        <div className={`flex ${isMine ? "justify-end" : "justify-start"} ${(showAvatar || showMyAvatar) ? "mt-3" : "mt-0.5"}`}>
                           {/* 상대방 아바타 */}
                           {!isMine && (
                             <div className="w-8 mr-2 shrink-0">
@@ -846,6 +848,14 @@ export default function Messages() {
                               </div>
                             </div>
                           </div>
+                          {/* 내 아바타 */}
+                          {isMine && (
+                            <div className="w-8 ml-2 shrink-0">
+                              {showMyAvatar && (
+                                <Avatar src={myAvatar} name={user?.user_metadata?.name || "나"} size="w-8 h-8" textSize="text-xs" className="bg-primary/10 text-primary" />
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
