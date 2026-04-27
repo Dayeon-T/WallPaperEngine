@@ -5,7 +5,6 @@ import { joinPresence } from "../api/cheers"
 import Login from "../widgets/Login"
 import Profile from "../widgets/Profile"
 import Clock from "../widgets/Clock"
-import Timer from "../widgets/Timer"
 import Weather from "../widgets/Weather"
 import Timetable from "../widgets/Timetable"
 import NowTime from "../widgets/NowTime"
@@ -148,7 +147,6 @@ export default function GridLayout() {
           <div className="grid grid-cols-2 gap-[1.5vw] shrink-0">
             <div>
               <CheerButton />
-              <Timer />
             </div>
             <Weather />
           </div>
@@ -188,7 +186,6 @@ export default function GridLayout() {
       </div>
       <div>
         <CheerButton />
-        <Timer />
       </div>
       <Weather />
       <Timetable />
