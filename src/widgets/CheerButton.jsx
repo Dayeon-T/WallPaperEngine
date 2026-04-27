@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchInbox } from "../api/cheers"
+
+const STORAGE_KEY = "dashboard_avatar_image"
 
 export default function CheerButton() {
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
+  const [imageData, setImageData] = useState(null)
+  const fileInputRef = useRef(null)
 
   const loadUnread = useCallback(async () => {
     if (!user) return
@@ -20,31 +24,73 @@ export default function CheerButton() {
     return () => window.removeEventListener("inbox-update", handler)
   }, [loadUnread])
 
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) setImageData(saved)
+  }, [])
+
   if (!user) return null
 
-  const FEATURE_LINK = "https://www.miricanvas.com/v2/ko/design2/v/5b53facf-22b1-4a38-955c-cc103c92e2f3"
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result
+      setImageData(result)
+      localStorage.setItem(STORAGE_KEY, result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleEditClick = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    fileInputRef.current?.click()
+  }
+
+  const handleNavigate = () => {
+    window.location.href = "/messages"
+  }
 
   return (
-    <div className="flex justify-end gap-2">
-      <button
-        onClick={() => window.open(FEATURE_LINK, "_blank", "width=1200,height=800")}
-        className="flex items-center gap-1.5 rounded-full bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-[clamp(0.6rem,0.7vw,0.8rem)] text-primary font-medium transition-colors"
-      >
-        <span>📋</span>
-        기능 보기
-      </button>
-      <a
-        href="/messages"
-        className="relative flex items-center gap-1.5 rounded-full bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-[clamp(0.6rem,0.7vw,0.8rem)] text-primary font-medium transition-colors no-underline"
-      >
-        <span>📬</span>
-        쪽지함
+    <div className="flex justify-end items-center h-full">
+      <div className="relative">
+        <button
+          onClick={handleNavigate}
+          className="relative w-[clamp(48px,5vw,72px)] h-[clamp(48px,5vw,72px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
+          aria-label="쪽지함"
+        >
+          {imageData ? (
+            <img src={imageData} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-[clamp(1.2rem,1.5vw,1.8rem)]">📬</span>
+          )}
+        </button>
+
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 pointer-events-none">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-      </a>
+
+        <button
+          onClick={handleEditClick}
+          className="absolute -bottom-1 -right-1 w-[clamp(20px,2vw,28px)] h-[clamp(20px,2vw,28px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.55rem,0.7vw,0.8rem)] border border-gray-200"
+          aria-label="이미지 업로드"
+          title="이미지 변경"
+        >
+          ✎
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
     </div>
   )
 }
