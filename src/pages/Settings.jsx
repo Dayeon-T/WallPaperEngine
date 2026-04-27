@@ -217,8 +217,16 @@ function ProfileSection({ user, showMsg }) {
   const [birthYear, setBirthYear] = useState("")
   const [birthMonth, setBirthMonth] = useState("")
   const [birthDay, setBirthDay] = useState("")
+  const [homeroomClass, setHomeroomClass] = useState("")
   const [saving, setSaving] = useState(false)
   const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    ;(async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.homeroom_class) setHomeroomClass(data.homeroom_class)
+    })()
+  }, [user.id])
 
   useEffect(() => {
     if (meta.birthday) {
@@ -265,6 +273,7 @@ function ProfileSection({ user, showMsg }) {
         name,
         atpt_code: atptCode,
         school_code: schoolCode,
+        homeroom_class: homeroomClass.trim() || null,
       })
     }
     setSaving(false)
@@ -358,6 +367,18 @@ function ProfileSection({ user, showMsg }) {
               ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">
+            담임 학급 <span className="text-gray-400">(예: 3-5, 비워두면 학급 시간표 기능 비활성화)</span>
+          </label>
+          <input
+            className={inputClass}
+            placeholder="3-5"
+            value={homeroomClass}
+            onChange={(e) => setHomeroomClass(e.target.value)}
+          />
         </div>
 
         <button className={btnPrimary} disabled={saving} onClick={handleSave}>

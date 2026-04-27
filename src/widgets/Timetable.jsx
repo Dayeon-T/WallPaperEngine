@@ -38,16 +38,20 @@ export default function Timetable() {
   const [swapMode, setSwapMode] = useState(false)
   const [selectedCell, setSelectedCell] = useState(null)
   const [weeklyOverrides, setWeeklyOverrides] = useState({})
+  const [tab, setTab] = useState("personal")
+  const [homeroomClass, setHomeroomClass] = useState(null)
 
   const loadTimetable = useCallback(async () => {
     if (!user) return
+    const isClass = tab === "class"
     const [ttResult, profileResult] = await Promise.all([
-      fetchTimetable(user.id),
+      fetchTimetable(user.id, isClass),
       fetchProfileRow(user.id),
     ])
     if (ttResult.data) setEntries(ttResult.data)
     if (profileResult.data) {
       if (profileResult.data.today_highlight === false) setHighlightToday(false)
+      setHomeroomClass(profileResult.data.homeroom_class || null)
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
         setPeriods(DEFAULT_PERIODS.map((def, i) => ({
@@ -57,13 +61,13 @@ export default function Timetable() {
         })))
       }
       const wt = profileResult.data.weekly_timetable
-      if (wt && wt.week === getMondayStr() && wt.map) {
+      if (!isClass && wt && wt.week === getMondayStr() && wt.map) {
         setWeeklyOverrides(wt.map)
       } else {
         setWeeklyOverrides({})
       }
     }
-  }, [user])
+  }, [user, tab])
 
   useEffect(() => {
     loadTimetable()
@@ -193,6 +197,7 @@ export default function Timetable() {
         subject: updates.subject ?? "",
         room: updates.room ?? existing?.room ?? "",
         color: updates.color ?? existing?.color ?? "#EBEBEB",
+        is_class: tab === "class",
       }
       if (existing?.id) entry.id = existing.id
 
@@ -284,9 +289,31 @@ export default function Timetable() {
   return (
     <div className="bg-widjet rounded-2xl p-7 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-4 shrink-0">
-        <p className="text-[clamp(0.9rem,1vw,1.25rem)] font-semibold">내 시간표</p>
+        <div className="flex items-baseline gap-3">
+          <button
+            onClick={() => { setTab("personal"); setSwapMode(false); setSelectedCell(null) }}
+            className={`text-[clamp(0.9rem,1vw,1.25rem)] font-semibold transition-colors ${
+              tab === "personal" ? "text-gray-900" : "text-gray-300 hover:text-gray-500"
+            }`}
+          >
+            내 시간표
+          </button>
+          {homeroomClass && (
+            <button
+              onClick={() => { setTab("class"); setSwapMode(false); setSelectedCell(null) }}
+              className={`text-[clamp(0.8rem,0.9vw,1.1rem)] font-semibold transition-colors ${
+                tab === "class" ? "text-gray-900" : "text-gray-300 hover:text-gray-500"
+              }`}
+            >
+              학급 시간표
+              <span className="ml-1 text-[clamp(0.55rem,0.65vw,0.75rem)] font-medium opacity-70">
+                {homeroomClass}
+              </span>
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
-          {swapMode && hasOverrides && (
+          {tab === "personal" && swapMode && hasOverrides && (
             <button
               onClick={handleResetWeekly}
               className="text-[clamp(0.5rem,0.6vw,0.7rem)] text-gray-400 hover:text-red-500 transition-colors"
@@ -294,16 +321,18 @@ export default function Timetable() {
               초기화
             </button>
           )}
-          <button
-            onClick={() => { setSwapMode(!swapMode); setSelectedCell(null) }}
-            className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
-              swapMode
-                ? "bg-primary text-white"
-                : "text-muted hover:bg-gray-100"
-            }`}
-          >
-            {swapMode ? "편집 완료" : "이번주 편집"}
-          </button>
+          {tab === "personal" && (
+            <button
+              onClick={() => { setSwapMode(!swapMode); setSelectedCell(null) }}
+              className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
+                swapMode
+                  ? "bg-primary text-white"
+                  : "text-muted hover:bg-gray-100"
+              }`}
+            >
+              {swapMode ? "편집 완료" : "이번주 편집"}
+            </button>
+          )}
         </div>
       </div>
       {swapMode && (
