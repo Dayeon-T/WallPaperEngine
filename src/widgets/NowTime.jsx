@@ -59,17 +59,22 @@ function formatRemaining(min) {
 export default function NowTime() {
   const { user } = useAuth()
   const [entries, setEntries] = useState([])
+  const [classEntries, setClassEntries] = useState([])
+  const [homeroomClass, setHomeroomClass] = useState(null)
   const [tick, setTick] = useState(0)
   const [PERIOD_SCHEDULE, setPeriodSchedule] = useState(DEFAULT_PERIOD_SCHEDULE)
 
   const loadData = useCallback(async () => {
     if (!user) return
-    const [ttResult, profileResult] = await Promise.all([
-      fetchTimetable(user.id),
+    const [ttResult, classResult, profileResult] = await Promise.all([
+      fetchTimetable(user.id, false),
+      fetchTimetable(user.id, true),
       fetchProfileRow(user.id),
     ])
     if (ttResult.data) setEntries(ttResult.data)
-    if (profileResult.data?.period_schedule) {
+    if (classResult.data) setClassEntries(classResult.data)
+    if (profileResult.data) {
+      setHomeroomClass(profileResult.data.homeroom_class || null)
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
         const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
@@ -128,6 +133,22 @@ export default function NowTime() {
     ? todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
     : null
 
+  const todayClassEntries = classEntries.filter((e) => e.day === dayIndex)
+  const activeClassEntry = activePeriod
+    ? todayClassEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+    : null
+
+  let classLineText = ""
+  if (homeroomClass && !isWeekend && activePeriod) {
+    if (activeClassEntry) {
+      const subj = activeClassEntry.subject || ""
+      const room = activeClassEntry.room || ""
+      classLineText = `${subj}${room ? ` (${room})` : ""}`
+    } else {
+      classLineText = "수업 없음"
+    }
+  }
+
   const AFTERSCHOOL_START = 9
   const latestAfterSchoolPeriod = todayEntries.reduce((max, e) => {
     const ep = e.end_period ?? e.start_period
@@ -179,6 +200,11 @@ export default function NowTime() {
     <div className="bg-widjet rounded-2xl p-7">
       <p className="text-[clamp(0.9rem,1vw,1.25rem)] font-semibold">지금 이 시각</p>
       <p className="text-[clamp(1.3rem,1.8vw,2rem)] font-extrabold mt-2">{bigText}</p>
+      {classLineText && (
+        <p className="text-[clamp(0.7rem,0.8vw,1rem)] text-gray-500 mt-1">
+          <span className="text-gray-400">{homeroomClass} 학급:</span> {classLineText}
+        </p>
+      )}
       <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-primary rounded-full transition-all duration-500"
