@@ -200,7 +200,10 @@ export default function Messages() {
     if (!file || !user) return
     setUploading(true)
     const { data, error } = await uploadAvatar(user.id, file)
-    if (!error && data) setMyAvatar(data)
+    if (!error && data) {
+      setMyAvatar(data)
+      window.dispatchEvent(new Event("avatar-change"))
+    }
     setUploading(false)
   }
 

@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchInbox } from "../api/cheers"
-
-const STORAGE_KEY = "dashboard_avatar_image"
+import { fetchProfileRow, uploadAvatar } from "../api/settings"
 
 export default function CheerButton() {
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [imageData, setImageData] = useState(null)
+  const [avatarUrl, setAvatarUrl] = useState(null)
+  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
   const loadUnread = useCallback(async () => {
@@ -16,7 +16,14 @@ export default function CheerButton() {
     if (data) setUnreadCount(data.filter((m) => !m.is_read).length)
   }, [user])
 
+  const loadAvatar = useCallback(async () => {
+    if (!user) return
+    const { data } = await fetchProfileRow(user.id)
+    if (data?.avatar_url) setAvatarUrl(data.avatar_url)
+  }, [user])
+
   useEffect(() => { loadUnread() }, [loadUnread])
+  useEffect(() => { loadAvatar() }, [loadAvatar])
 
   useEffect(() => {
     const handler = () => loadUnread()
@@ -25,22 +32,24 @@ export default function CheerButton() {
   }, [loadUnread])
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) setImageData(saved)
-  }, [])
+    const handler = () => loadAvatar()
+    window.addEventListener("avatar-change", handler)
+    return () => window.removeEventListener("avatar-change", handler)
+  }, [loadAvatar])
 
   if (!user) return null
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result
-      setImageData(result)
-      localStorage.setItem(STORAGE_KEY, result)
+    if (!file || !user) return
+    setUploading(true)
+    const { data, error } = await uploadAvatar(user.id, file)
+    setUploading(false)
+    if (!error && data) {
+      setAvatarUrl(data)
+      window.dispatchEvent(new Event("avatar-change"))
     }
-    reader.readAsDataURL(file)
+    e.target.value = ""
   }
 
   const handleEditClick = (e) => {
@@ -58,27 +67,32 @@ export default function CheerButton() {
       <div className="relative">
         <button
           onClick={handleNavigate}
-          className="relative w-[clamp(72px,8vw,120px)] h-[clamp(72px,8vw,120px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
+          className="relative w-[clamp(96px,10vw,150px)] h-[clamp(96px,10vw,150px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
           aria-label="쪽지함"
         >
-          {imageData ? (
-            <img src={imageData} alt="" className="w-full h-full object-cover" />
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span className="text-[clamp(1.8rem,2.4vw,3rem)]">📬</span>
+            <span className="text-[clamp(2.2rem,3vw,3.6rem)]">📬</span>
+          )}
+          {uploading && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs">
+              업로드 중...
+            </span>
           )}
         </button>
 
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 pointer-events-none">
+          <span className="absolute top-1 right-1 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold px-1 pointer-events-none">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
 
         <button
           onClick={handleEditClick}
-          className="absolute bottom-0 right-0 w-[clamp(24px,2.6vw,36px)] h-[clamp(24px,2.6vw,36px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.65rem,0.85vw,1rem)] border border-gray-200"
+          className="absolute bottom-1 right-1 w-[clamp(28px,3vw,42px)] h-[clamp(28px,3vw,42px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.75rem,1vw,1.2rem)] border border-gray-200"
           aria-label="이미지 업로드"
-          title="이미지 변경"
+          title="프로필 사진 변경"
         >
           ✎
         </button>
