@@ -58,13 +58,13 @@ export default function CheerButton() {
       <div className="relative">
         <button
           onClick={handleNavigate}
-          className="relative w-[clamp(48px,5vw,72px)] h-[clamp(48px,5vw,72px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
+          className="relative w-[clamp(72px,8vw,120px)] h-[clamp(72px,8vw,120px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
           aria-label="쪽지함"
         >
           {imageData ? (
             <img src={imageData} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span className="text-[clamp(1.2rem,1.5vw,1.8rem)]">📬</span>
+            <span className="text-[clamp(1.8rem,2.4vw,3rem)]">📬</span>
           )}
         </button>
 
@@ -76,7 +76,7 @@ export default function CheerButton() {
 
         <button
           onClick={handleEditClick}
-          className="absolute -bottom-1 -right-1 w-[clamp(20px,2vw,28px)] h-[clamp(20px,2vw,28px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.55rem,0.7vw,0.8rem)] border border-gray-200"
+          className="absolute bottom-0 right-0 w-[clamp(24px,2.6vw,36px)] h-[clamp(24px,2.6vw,36px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.65rem,0.85vw,1rem)] border border-gray-200"
           aria-label="이미지 업로드"
           title="이미지 변경"
         >
