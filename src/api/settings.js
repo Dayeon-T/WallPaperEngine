@@ -13,7 +13,7 @@ export async function updatePassword(newPassword) {
 export async function fetchProfileRow(userId) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("period_schedule, quick_links, bg_prefs, widget_style, dday_events, layout_mode, today_highlight, folder_names, weekly_timetable, avatar_url, friend_code, homeroom_class")
+    .select("period_schedule, quick_links, bg_prefs, widget_style, dday_events, layout_mode, today_highlight, folder_names, weekly_timetable, avatar_url, friend_code, homeroom_class, schedule_view_mode")
     .eq("id", userId)
     .single()
   return { data, error }

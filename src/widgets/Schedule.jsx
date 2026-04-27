@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "../context/AuthContext"
 import { NEIS_KEY } from "../api/neis"
 import { fetchSchoolEvents } from "../api/schoolEvents"
+import { fetchProfileRow, upsertProfileRow } from "../api/settings"
 
 function getMonday(d) {
   const date = new Date(d)
@@ -66,6 +67,25 @@ export default function Schedule() {
 
   const atptCode = user?.user_metadata?.atpt_code
   const schoolCode = user?.user_metadata?.school_code
+
+  useEffect(() => {
+    if (!user) return
+    ;(async () => {
+      const { data } = await fetchProfileRow(user.id)
+      if (data?.schedule_view_mode === "month" || data?.schedule_view_mode === "week") {
+        setViewMode(data.schedule_view_mode)
+      }
+    })()
+  }, [user])
+
+  const changeViewMode = useCallback(async (mode) => {
+    setViewMode(mode)
+    if (mode === "week") setWeekOffset(0)
+    else setMonthOffset(0)
+    if (user) {
+      upsertProfileRow(user.id, { schedule_view_mode: mode }).catch(() => {})
+    }
+  }, [user])
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -225,7 +245,7 @@ export default function Schedule() {
       </div>
       <div className="flex items-center gap-1 mt-2 shrink-0">
         <button
-          onClick={() => { setViewMode("week"); setWeekOffset(0) }}
+          onClick={() => changeViewMode("week")}
           className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
             viewMode === "week" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
           }`}
@@ -233,7 +253,7 @@ export default function Schedule() {
           주간
         </button>
         <button
-          onClick={() => { setViewMode("month"); setMonthOffset(0) }}
+          onClick={() => changeViewMode("month")}
           className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
             viewMode === "month" ? "bg-primary text-white" : "text-muted hover:bg-gray-100"
           }`}
