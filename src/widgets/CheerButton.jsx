@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchInbox } from "../api/cheers"
-import { fetchProfileRow, uploadAvatar } from "../api/settings"
+import { fetchProfileRow } from "../api/settings"
 
 export default function CheerButton() {
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
   const [avatarUrl, setAvatarUrl] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef(null)
 
   const loadUnread = useCallback(async () => {
     if (!user) return
@@ -39,25 +37,6 @@ export default function CheerButton() {
 
   if (!user) return null
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    setUploading(true)
-    const { data, error } = await uploadAvatar(user.id, file)
-    setUploading(false)
-    if (!error && data) {
-      setAvatarUrl(data)
-      window.dispatchEvent(new Event("avatar-change"))
-    }
-    e.target.value = ""
-  }
-
-  const handleEditClick = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    fileInputRef.current?.click()
-  }
-
   const handleNavigate = () => {
     window.location.href = "/messages"
   }
@@ -75,11 +54,6 @@ export default function CheerButton() {
           ) : (
             <span className="text-[clamp(2.2rem,3vw,3.6rem)]">📬</span>
           )}
-          {uploading && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs">
-              업로드 중...
-            </span>
-          )}
         </button>
 
         {unreadCount > 0 && (
@@ -87,23 +61,6 @@ export default function CheerButton() {
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-
-        <button
-          onClick={handleEditClick}
-          className="absolute bottom-1 right-1 w-[clamp(28px,3vw,42px)] h-[clamp(28px,3vw,42px)] rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors flex items-center justify-center text-[clamp(0.75rem,1vw,1.2rem)] border border-gray-200"
-          aria-label="이미지 업로드"
-          title="프로필 사진 변경"
-        >
-          ✎
-        </button>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-        />
       </div>
     </div>
   )
