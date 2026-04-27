@@ -44,3 +44,8 @@ html, body, #root {
   background-color: var(--widget-btn-bg, var(--color-btn)) !important;
   color: var(--widget-btn-text, inherit) !important;
 }
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}

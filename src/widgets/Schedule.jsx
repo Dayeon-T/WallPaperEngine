@@ -62,6 +62,7 @@ export default function Schedule() {
   const [error, setError] = useState("")
   const [periodLabel, setPeriodLabel] = useState("")
   const [currentMonthInfo, setCurrentMonthInfo] = useState({ year: 0, month: 0 })
+  const [selectedDay, setSelectedDay] = useState(null)
 
   const atptCode = user?.user_metadata?.atpt_code
   const schoolCode = user?.user_metadata?.school_code
@@ -198,10 +199,12 @@ export default function Schedule() {
   }
 
   const handlePrev = () => {
+    setSelectedDay(null)
     if (viewMode === "week") setWeekOffset(p => p - 1)
     else setMonthOffset(p => p - 1)
   }
   const handleNext = () => {
+    setSelectedDay(null)
     if (viewMode === "week") setWeekOffset(p => p + 1)
     else setMonthOffset(p => p + 1)
   }
@@ -283,7 +286,7 @@ export default function Schedule() {
       )}
 
       {viewMode === "month" && (
-        <div className="mt-3 flex flex-col flex-1 min-h-0">
+        <div className="mt-3 flex flex-col flex-1 min-h-0 relative">
           <div className="grid grid-cols-7 gap-1 text-[clamp(0.55rem,0.65vw,0.75rem)] text-center text-muted mb-1 shrink-0">
             {["일","월","화","수","목","금","토"].map((d, i) => (
               <div key={d} className={i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : ""}>{d}</div>
@@ -302,12 +305,15 @@ export default function Schedule() {
                 const dow = d.getDay()
                 const dayEvents = eventsByDate[dStr] || []
 
+                const isSelected = selectedDay === dStr
                 return (
-                  <div
+                  <button
                     key={i}
-                    className={`flex flex-col rounded-md p-1 overflow-hidden ${
+                    type="button"
+                    onClick={() => setSelectedDay(isSelected ? null : dStr)}
+                    className={`flex flex-col rounded-md p-1 overflow-hidden text-left transition hover:ring-2 hover:ring-primary/40 ${
                       isCurrentMonth ? "bg-white/60" : "bg-white/20"
-                    }`}
+                    } ${isSelected ? "ring-2 ring-primary" : ""}`}
                     style={isToday ? {
                       backgroundColor: "var(--schedule-today-bg, #3B3B3B)",
                       color: "var(--schedule-today-text, #FFFFFF)",
@@ -349,9 +355,58 @@ export default function Schedule() {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
+            </div>
+          )}
+
+          {/* 선택한 날짜 일정 팝오버 */}
+          {selectedDay && (
+            <div
+              className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 backdrop-blur-[2px] rounded-md"
+              onClick={() => setSelectedDay(null)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-2xl p-5 w-[80%] max-w-xs max-h-[85%] overflow-y-auto animate-[popIn_0.18s_ease-out]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-bold text-sm">
+                    {selectedDay.slice(0, 4)}년 {Number(selectedDay.slice(4, 6))}월 {Number(selectedDay.slice(6, 8))}일
+                  </p>
+                  <button
+                    onClick={() => setSelectedDay(null)}
+                    className="text-gray-400 hover:text-gray-600 transition w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                {(eventsByDate[selectedDay] || []).length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4">일정이 없어요 🗓️</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {(eventsByDate[selectedDay] || []).map((ev, j) => (
+                      <li
+                        key={j}
+                        className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gray-50"
+                      >
+                        <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
+                          ev.source === "custom" ? "bg-primary" : "bg-gray-400"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-800">{ev.name}</p>
+                          {ev.end_date && ev.end_date !== ev.date && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {Number(ev.date.slice(6))}일 ~ {Number(ev.end_date.slice(6))}일
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
         </div>
