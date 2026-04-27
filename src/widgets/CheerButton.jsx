@@ -57,7 +57,7 @@ export default function CheerButton() {
         </button>
 
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold px-1 pointer-events-none">
+          <span className="absolute -top-1 -right-1 min-w-[clamp(24px,2.6vw,34px)] h-[clamp(24px,2.6vw,34px)] flex items-center justify-center rounded-full bg-red-500 text-white text-[clamp(0.7rem,0.85vw,1rem)] font-bold px-1.5 pointer-events-none shadow-md ring-2 ring-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
