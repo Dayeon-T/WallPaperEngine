@@ -353,26 +353,26 @@ export default function Schedule() {
                     >
                       {d.getDate()}
                     </span>
-                    <div className="flex flex-col gap-px mt-0.5 overflow-hidden">
-                      {dayEvents.slice(0, 2).map((ev, j) => (
-                        <span
-                          key={j}
-                          className="text-[clamp(0.45rem,0.55vw,0.6rem)] truncate leading-tight"
-                          style={isToday ? { color: "var(--schedule-today-text, #FFFFFF)" } : { color: "#4B5563" }}
-                          title={ev.name}
-                        >
-                          • {ev.name}
-                        </span>
-                      ))}
-                      {dayEvents.length > 2 && (
-                        <span
-                          className="text-[clamp(0.45rem,0.5vw,0.55rem)] leading-tight"
-                          style={isToday ? { color: "var(--schedule-today-text, #FFFFFF)" } : { color: "#9CA3AF" }}
-                        >
-                          +{dayEvents.length - 2}
-                        </span>
-                      )}
-                    </div>
+                    {dayEvents.length > 0 && (
+                      <div className="flex items-center gap-0.5 mt-0.5 flex-wrap">
+                        {dayEvents.slice(0, 3).map((ev, j) => (
+                          <span
+                            key={j}
+                            className={`w-1 h-1 rounded-full shrink-0 ${
+                              ev.source === "custom" ? "bg-primary" : isToday ? "bg-white" : "bg-gray-400"
+                            }`}
+                          />
+                        ))}
+                        {dayEvents.length > 3 && (
+                          <span
+                            className="text-[clamp(0.4rem,0.45vw,0.5rem)] leading-none ml-0.5"
+                            style={isToday ? { color: "var(--schedule-today-text, #FFFFFF)" } : { color: "#9CA3AF" }}
+                          >
+                            +{dayEvents.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </button>
                 )
               })}
