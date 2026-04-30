@@ -10,6 +10,7 @@ import {
   updateTodoContent,
 } from "../api/todos"
 import TodoHistory from "./Components/TodoHistory"
+import DateDropdown from "./Components/DateDropdown"
 
 const SORT_MODES = [
   { id: "important", label: "중요도순" },
@@ -259,13 +260,10 @@ export default function ToDo() {
           className="flex-1 rounded-xl px-4 py-2.5 text-[clamp(0.7rem,0.75vw,0.9rem)] outline-none focus:ring-1 focus:ring-primary min-w-0"
           style={{ backgroundColor: "var(--todo-bg, var(--color-btn))", color: "var(--todo-text, inherit)" }}
         />
-        <input
-          type="date"
+        <DateDropdown
+          size="small"
           value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="rounded-xl px-2 py-2.5 text-[clamp(0.6rem,0.65vw,0.8rem)] outline-none focus:ring-1 focus:ring-primary w-[clamp(6rem,8vw,9rem)] shrink-0"
-          style={{ backgroundColor: "var(--todo-bg, var(--color-btn))", color: "var(--todo-text, inherit)" }}
-          title="마감일 (선택)"
+          onChange={setDueDate}
         />
         <button
           onClick={handleAdd}
