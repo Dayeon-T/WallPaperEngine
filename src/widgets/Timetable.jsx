@@ -80,13 +80,11 @@ export default function Timetable() {
   }, [])
 
   const baseEntryMap = {}
-  const baseSkipped = new Set()
+  const baseCellMap = {}
   for (const entry of entries) {
     baseEntryMap[`${entry.day}-${entry.start_period}`] = entry
-    if (entry.end_period > entry.start_period) {
-      for (let p = entry.start_period + 1; p <= entry.end_period; p++) {
-        baseSkipped.add(`${entry.day}-${p}`)
-      }
+    for (let p = entry.start_period; p <= entry.end_period; p++) {
+      baseCellMap[`${entry.day}-${p}`] = entry
     }
   }
 
@@ -94,25 +92,36 @@ export default function Timetable() {
     if (weeklyOverrides[cellKey] !== undefined) {
       return weeklyOverrides[cellKey]
     }
-    return baseEntryMap[cellKey] || null
+    return baseCellMap[cellKey] || null
   }
 
-  const effectiveMap = {}
-  const effectiveSkipped = new Set()
-  const allKeys = new Set([
-    ...Object.keys(baseEntryMap),
-    ...Object.keys(weeklyOverrides),
-  ])
-  for (const key of allKeys) {
-    const entry = getEffectiveEntry(key)
-    if (entry) {
-      effectiveMap[key] = entry
-      if (entry.end_period > entry.start_period) {
-        for (let p = entry.start_period + 1; p <= entry.end_period; p++) {
-          effectiveSkipped.add(`${entry.day}-${p}`)
-        }
-      }
+  const getCellEntry = (day, period) => {
+    const cellKey = `${day}-${period}`
+    const entry = getEffectiveEntry(cellKey)
+    if (!entry) return null
+    return { ...entry, day, start_period: period, end_period: period }
+  }
+
+  const getGroupKey = (day, period) => {
+    const cellKey = `${day}-${period}`
+    const entry = getEffectiveEntry(cellKey)
+    if (!entry) return ""
+    if (weeklyOverrides[cellKey] !== undefined) return `override-${cellKey}`
+    return entry.id || `base-${entry.day}-${entry.start_period}`
+  }
+
+  const getSpan = (day, rowIndex) => {
+    const period = visiblePeriods[rowIndex].originalIndex
+    const groupKey = getGroupKey(day, period)
+    if (!groupKey) return 1
+
+    let span = 1
+    for (let i = rowIndex + 1; i < visiblePeriods.length; i++) {
+      const nextPeriod = visiblePeriods[i].originalIndex
+      if (getGroupKey(day, nextPeriod) !== groupKey) break
+      span += 1
     }
+    return span
   }
 
   const saveWeeklyOverrides = async (newMap) => {
@@ -120,6 +129,7 @@ export default function Timetable() {
     const wt = { week: getMondayStr(), map: newMap }
     setWeeklyOverrides(newMap)
     await upsertProfileRow(user.id, { weekly_timetable: wt })
+    window.dispatchEvent(new Event("timetable-change"))
   }
 
   const handleSwapClick = async (cellKey) => {
@@ -145,7 +155,7 @@ export default function Timetable() {
         ...entryA,
         day: dayB,
         start_period: periodB,
-        end_period: periodB + (entryA.end_period - entryA.start_period),
+        end_period: periodB,
       }
     } else {
       newMap[cellKey] = null
@@ -156,7 +166,7 @@ export default function Timetable() {
         ...entryB,
         day: dayA,
         start_period: periodA,
-        end_period: periodA + (entryB.end_period - entryB.start_period),
+        end_period: periodA,
       }
     } else {
       newMap[selectedCell] = null
@@ -256,10 +266,15 @@ export default function Timetable() {
       const day = col
       const cellKey = `${day}-${period}`
 
-      if (effectiveSkipped.has(cellKey)) continue
+      if (!swapMode) {
+        const prevPeriod = visiblePeriods[row - 2]?.originalIndex
+        if (prevPeriod && getGroupKey(day, prevPeriod) && getGroupKey(day, prevPeriod) === getGroupKey(day, period)) {
+          continue
+        }
+      }
 
-      const entry = effectiveMap[cellKey]
-      const span = entry ? entry.end_period - entry.start_period + 1 : 1
+      const entry = swapMode ? getCellEntry(day, period) : getEffectiveEntry(cellKey)
+      const span = !swapMode && entry ? getSpan(day, row - 1) : 1
       const isEditing = editingCell === cellKey
       const isSelected = swapMode && selectedCell === cellKey
 

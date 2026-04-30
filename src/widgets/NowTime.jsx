@@ -19,6 +19,17 @@ const DEFAULT_PERIOD_SCHEDULE = [
 
 const DEFAULT_END = "16:00"
 
+function getMondayStr() {
+  const d = new Date()
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  return `${y}${m}${dd}`
+}
+
 function buildBreakSlots(schedule) {
   const breaks = []
   for (let i = 1; i < schedule.length - 1; i++) {
@@ -63,6 +74,7 @@ export default function NowTime() {
   const [homeroomClass, setHomeroomClass] = useState(null)
   const [tick, setTick] = useState(0)
   const [PERIOD_SCHEDULE, setPeriodSchedule] = useState(DEFAULT_PERIOD_SCHEDULE)
+  const [weeklyOverrides, setWeeklyOverrides] = useState({})
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -75,6 +87,12 @@ export default function NowTime() {
     if (classResult.data) setClassEntries(classResult.data)
     if (profileResult.data) {
       setHomeroomClass(profileResult.data.homeroom_class || null)
+      const wt = profileResult.data.weekly_timetable
+      if (wt && wt.week === getMondayStr() && wt.map) {
+        setWeeklyOverrides(wt.map)
+      } else {
+        setWeeklyOverrides({})
+      }
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
         const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
@@ -130,7 +148,9 @@ export default function NowTime() {
   }
 
   const activeEntry = activePeriod
-    ? todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+    ? weeklyOverrides[`${dayIndex}-${activePeriod}`] !== undefined
+      ? weeklyOverrides[`${dayIndex}-${activePeriod}`]
+      : todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
     : null
 
   const todayClassEntries = classEntries.filter((e) => e.day === dayIndex)

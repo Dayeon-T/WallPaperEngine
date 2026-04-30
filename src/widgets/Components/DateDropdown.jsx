@@ -209,7 +209,7 @@ export default function DateDropdown({ value, onChange, size = "default", defaul
         ref={buttonRef}
         type="button"
         onClick={openPicker}
-        className={`${h} min-w-[8.5rem] rounded-lg border border-gray-200 bg-white px-3 ${textSize} text-gray-700 outline-none transition-colors hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary`}
+        className={`${h} min-w-[6.5rem] rounded-lg border border-gray-200 bg-white px-2.5 ${textSize} text-gray-700 outline-none transition-colors hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary`}
       >
         {value || "날짜 선택"}
       </button>
