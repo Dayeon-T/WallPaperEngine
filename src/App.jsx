@@ -9,7 +9,6 @@ import FindId from "./pages/FindId"
 import FindPassword from "./pages/FindPassword"
 import Settings from "./pages/Settings"
 import Messages from "./pages/Messages"
-import TrialEnded from "./pages/TrialEnded"
 
 function bgPrefsToStyle(prefs) {
   if (!prefs) return {}
@@ -101,7 +100,7 @@ function App() {
     >
       <div className="absolute left-7 right-7 top-7 bottom-16">
         <Routes>
-          <Route path="/" element={<TrialEnded />} />
+          <Route path="/" element={<GridLayout />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/find-id" element={<FindId />} />
