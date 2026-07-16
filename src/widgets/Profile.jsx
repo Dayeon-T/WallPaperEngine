@@ -55,8 +55,9 @@ export default function Profile() {
   )
 
   return (
-    <div className="bg-widjet rounded-2xl pt-7">
-      <div className="flex flex-col gap-2 mx-7">
+    <div className="bg-widjet rounded-2xl pt-7 h-full flex flex-col">
+      {/* 위젯이 세로로 늘어나면 이 영역이 늘어나고 퀵링크 바는 바닥에 붙는다 */}
+      <div className="flex flex-col gap-2 mx-7 flex-1 min-h-0">
         <div className="flex items-center justify-between">
           <p className="text-[clamp(0.8rem,0.9vw,1.125rem)] font-semibold">안녕하세요,</p>
           <button
@@ -69,7 +70,7 @@ export default function Profile() {
         <p className="text-[clamp(1.2rem,2vw,2.25rem)] font-extrabold">{name} 선생님</p>
         <p className="text-[clamp(0.6rem,0.7vw,0.875rem)] text-muted mb-4">{user?.email}</p>
       </div>
-      <div className="flex flex-col bg-btn rounded-b-2xl py-3 gap-2">
+      <div className="flex flex-col bg-btn rounded-b-2xl py-3 gap-2 shrink-0">
         <ul
           className="grid w-full text-center text-sm divide-x divide-[#E5E5E5]"
           style={{ gridTemplateColumns: `repeat(${row1.length}, minmax(0, 1fr))` }}

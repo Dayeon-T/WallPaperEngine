@@ -1688,6 +1688,22 @@ function LayoutSection({ user, showMsg }) {
       </div>
 
       <div className="mt-8 border-t pt-6">
+        <h3 className="text-base font-semibold mb-1">위젯 배치 편집</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          대시보드에서 위젯을 드래그해 위치를 옮기고, 가장자리를 잡아 크기를 조절할 수 있어요.
+        </p>
+        <button
+          onClick={() => {
+            sessionStorage.setItem("layout_edit_pending", "1")
+            window.location.href = "/"
+          }}
+          className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-80 transition"
+        >
+          편집 모드 열기
+        </button>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
         <h3 className="text-base font-semibold mb-1">시간표 오늘 하이라이트</h3>
         <p className="text-sm text-gray-400 mb-4">오늘 요일 헤더에 하이라이트 효과를 표시합니다.</p>
         <button
