@@ -455,7 +455,7 @@ function PeriodSection({ user, showMsg }) {
         const saved = data.period_schedule
         if (Array.isArray(saved) && saved.length > 0) {
           const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
-            label: def.label,
+            label: saved[i]?.label || def.label,
             start: saved[i]?.start || def.start,
             end: saved[i]?.end || def.end,
             enabled: saved[i]?.enabled ?? def.enabled,
@@ -501,7 +501,20 @@ function PeriodSection({ user, showMsg }) {
                 onChange={(e) => updateField(i, "enabled", e.target.checked)}
                 className="accent-primary w-4 h-4"
               />
-              <span className={`font-medium ${!p.enabled ? "text-gray-300" : ""}`}>{p.label}</span>
+              {/* 방과후 A/B(인덱스 8, 9)는 이름도 직접 수정 가능 */}
+              {i >= 8 ? (
+                <input
+                  type="text"
+                  maxLength={10}
+                  className={`h-10 rounded-lg border border-gray-200 px-3 text-sm font-medium outline-none focus:border-primary ${!p.enabled ? "opacity-40" : ""}`}
+                  value={p.label}
+                  disabled={!p.enabled}
+                  placeholder={DEFAULT_PERIOD_SCHEDULE[i + 1].label}
+                  onChange={(e) => updateField(i, "label", e.target.value)}
+                />
+              ) : (
+                <span className={`font-medium ${!p.enabled ? "text-gray-300" : ""}`}>{p.label}</span>
+              )}
               <input
                 type="time"
                 className={`h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-primary ${!p.enabled ? "opacity-40" : ""}`}

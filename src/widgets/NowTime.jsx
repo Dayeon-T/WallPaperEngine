@@ -96,7 +96,7 @@ export default function NowTime() {
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
         const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
-          label: def.label,
+          label: saved[i]?.label || def.label,
           start: saved[i]?.start || def.start,
           end: saved[i]?.end || def.end,
           enabled: saved[i]?.enabled ?? def.enabled,
