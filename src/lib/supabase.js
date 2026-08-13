@@ -54,11 +54,33 @@ const cookieStorage = {
   removeItem: (key) => removeCookie(key),
 }
 
+const STORAGE_KEY = "sb-session"
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: cookieStorage,
-    storageKey: "sb-session",
+    storageKey: STORAGE_KEY,
     autoRefreshToken: true,
     persistSession: true,
   },
 })
+
+// getSession()은 토큰이 만료됐으면 갱신 요청이 끝날 때까지 resolve되지 않는다.
+// 첫 렌더링에서 로그인 상태를 바로 판단하려면 저장된 값을 직접 읽어야 한다.
+export function readStoredSession() {
+  try {
+    const raw = getCookie(STORAGE_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    return session?.access_token ? session : null
+  } catch {
+    // 쿠키 4KB 제한으로 잘렸거나 형식이 깨진 경우
+    return null
+  }
+}
+
+// 만료 10초 전부터는 곧 갱신될 세션으로 보고 신선하지 않다고 판단한다.
+export function isSessionFresh(session) {
+  if (!session?.expires_at) return false
+  return session.expires_at * 1000 > Date.now() + 10_000
+}

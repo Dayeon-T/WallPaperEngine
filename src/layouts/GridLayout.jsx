@@ -61,7 +61,8 @@ const RESIZE_HANDLES = [
 
 function ProfileSlot() {
   const { user, loading } = useAuth()
-  if (loading) return null
+  // 만료된 세션을 갱신하는 동안에도 위젯 틀은 유지해 빈 구멍처럼 보이지 않게 한다.
+  if (loading) return <div className="bg-widjet rounded-2xl p-7 h-full animate-pulse" />
   return user ? <Profile /> : <Login />
 }
 
