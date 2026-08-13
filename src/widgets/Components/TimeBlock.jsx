@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useLayoutEffect } from "react"
+import { createPortal } from "react-dom"
 
 const PRESET_COLORS = [
   "#FFCDD2", "#F8BBD0", "#E1BEE7", "#C5CAE9",
@@ -29,6 +30,9 @@ export default function TimeBlock({
   const [mergeNext, setMergeNext] = useState(false)
   const ref = useRef(null)
   const inputRef = useRef(null)
+  const popupRef = useRef(null)
+  // 팝업은 위젯 밖(body)에 그리므로 화면 기준 좌표를 직접 계산한다.
+  const [popupPos, setPopupPos] = useState(null)
 
   useEffect(() => {
     if (isEditing) {
@@ -40,10 +44,41 @@ export default function TimeBlock({
     }
   }, [isEditing])
 
+  // 셀 아래에 띄우되, 화면 밖으로 나가면 위로 뒤집거나 가장자리 안으로 밀어 넣는다.
+  useLayoutEffect(() => {
+    if (!isEditing) return
+
+    const place = () => {
+      const cell = ref.current?.getBoundingClientRect()
+      const popup = popupRef.current?.getBoundingClientRect()
+      if (!cell || !popup) return
+
+      const margin = 8
+
+      let top = cell.bottom + margin
+      if (top + popup.height > window.innerHeight - margin) {
+        top = cell.top - popup.height - margin
+      }
+      top = Math.min(Math.max(top, margin), window.innerHeight - popup.height - margin)
+
+      let left = cell.left + cell.width / 2 - popup.width / 2
+      left = Math.min(Math.max(left, margin), window.innerWidth - popup.width - margin)
+
+      setPopupPos({ top, left })
+    }
+
+    place()
+    window.addEventListener("resize", place)
+    return () => window.removeEventListener("resize", place)
+  }, [isEditing])
+
   useEffect(() => {
     if (!isEditing) return
     function handleClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) {
+      // 팝업이 셀 밖(body)에 있으므로 셀과 팝업 둘 다 확인해야 한다.
+      const insideCell = ref.current?.contains(e.target)
+      const insidePopup = popupRef.current?.contains(e.target)
+      if (!insideCell && !insidePopup) {
         const endPeriod = mergeNext
           ? (currentEntry?.start_period ?? row) + 1
           : (currentEntry?.start_period ?? row)
@@ -98,9 +133,18 @@ export default function TimeBlock({
       {roomProp && (
         <p className="text-[clamp(0.5rem,0.6vw,0.75rem)] text-primary leading-tight relative">{roomProp}</p>
       )}
-      {isEditing && (
+      {isEditing && createPortal(
         <div
-          className={`absolute left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-xl p-4 flex flex-col gap-3 z-50 min-w-[200px] ${row >= 6 ? "bottom-full mb-2" : "top-full mt-2"}`}
+          ref={popupRef}
+          className="fixed bg-white rounded-2xl shadow-xl p-4 flex flex-col gap-3 z-[9999] min-w-[200px]"
+          style={{
+            top: popupPos?.top ?? 0,
+            left: popupPos?.left ?? 0,
+            // 위치를 재기 전 한 프레임 동안 엉뚱한 곳에 번쩍이는 것을 막는다.
+            visibility: popupPos ? "visible" : "hidden",
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
         >
           <input
             ref={inputRef}
@@ -165,7 +209,8 @@ export default function TimeBlock({
           >
             확인
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
