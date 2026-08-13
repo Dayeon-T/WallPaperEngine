@@ -30,7 +30,7 @@ export default function SignIn() {
       <div className="w-[30%]">
         <div className="flex justify-center">
           <h1 className="mt-10 mb-20 text-5xl font-black">
-            <a href="/">DASHBOARD</a>
+            <a href="/">PLANSCHOOL</a>
           </h1>
         </div>
         <div className="flex justify-center">

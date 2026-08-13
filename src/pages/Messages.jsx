@@ -506,7 +506,7 @@ export default function Messages() {
           {/* 내 프로필 */}
           <div className="px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
             <div className="flex items-center justify-between mb-3">
-              <a href="/" className="text-lg font-black">DASHBOARD</a>
+              <a href="/" className="text-lg font-black">PLANSCHOOL</a>
               <button
                 onClick={() => setShowNewChat(!showNewChat)}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition"

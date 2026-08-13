@@ -144,7 +144,7 @@ export default function Settings() {
       <div />
       <div className="col-span-3 flex bg-white rounded-2xl overflow-hidden">
       <nav className="w-52 shrink-0 border-r border-gray-100 p-6 flex flex-col gap-1">
-        <a href="/" className="text-xl font-black mb-8 block">DASHBOARD</a>
+        <a href="/" className="text-xl font-black mb-8 block">PLANSCHOOL</a>
         {SECTIONS.map((s) => (
           <button
             key={s.id}
