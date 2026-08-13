@@ -7,6 +7,7 @@ import SignIn from "./pages/SignIn"
 import SignUp from "./pages/SignUp"
 import FindId from "./pages/FindId"
 import FindPassword from "./pages/FindPassword"
+import ResetPassword from "./pages/ResetPassword"
 import Settings from "./pages/Settings"
 import Messages from "./pages/Messages"
 
@@ -105,6 +106,7 @@ function App() {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/find-id" element={<FindId />} />
           <Route path="/find-password" element={<FindPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/messages" element={<Messages />} />
         </Routes>

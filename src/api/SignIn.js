@@ -39,7 +39,10 @@ export async function signUp(email, password, profile) {
 }
 
 export async function resetPassword(email) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email)
+  // 지정하지 않으면 Site URL(대시보드 첫 화면)로 돌아와 새 비밀번호를 입력할 곳이 없다.
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  })
   return { error, errorMessage: error ? mapAuthError(error) : "" }
 }
 
