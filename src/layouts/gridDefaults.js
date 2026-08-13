@@ -27,11 +27,8 @@ export function minSize(id) {
 
 // 리사이즈 잠금: 내용 구조상 크기가 바뀌면 깨지는 위젯
 // w: 가로 고정, h: 세로 고정 (이동은 항상 가능)
-export const SIZE_LOCKS = {
-  timetable: { w: true, h: true },
-  meals:     { w: true },
-  schedule:  { w: true },
-}
+// 현재는 전부 해제 — 위젯들이 비례 단위(clamp/fr)로 그려져 크기 제한은 MIN_SIZES로 충분
+export const SIZE_LOCKS = {}
 
 export function sizeLock(id) {
   return SIZE_LOCKS[id] || {}

@@ -181,7 +181,8 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
 
 // 단일 위젯(singleId)과 열 밴드 묶음(bandId가 속한 열에서 단일 위젯의
 // 세로 범위와 겹치는 위젯들)을 통째로 맞바꾸는 후보 생성.
-// 예: 시간표(높이 12) ↔ [지금 이 시각(3) + 할 일(9)] 묶음
+// 예: 시간표(높이 12) ↔ [급식(5) + 학사일정(7)] 묶음
+// 폭이 달라도 되도록 서로의 자리에 맞춰 크기를 함께 바꾼다.
 function bandSwapCandidate(layout, singleId, bandId) {
   const single = layout[singleId]
   const base = layout[bandId]
@@ -198,11 +199,26 @@ function bandSwapCandidate(layout, singleId, bandId) {
   const maxY = Math.max(...members.map(([, r]) => r.y + r.h))
   const box = { x: base.x, y: minY, w: base.w, h: maxY - minY }
 
+  // 단일 위젯은 밴드가 차지하던 상자를 통째로 물려받는다
+  const sMin = minSize(singleId)
+  if (box.w < sMin.w || box.h < sMin.h) return null
+
+  // 밴드 멤버들은 단일 위젯 자리에 맞춰 폭을 바꾸고 높이를 비례 배분해 쌓는다
   const next = { ...layout }
-  const dx = single.x - box.x
-  const dy = single.y - box.y
-  for (const [k, r] of members) next[k] = { ...r, x: r.x + dx, y: r.y + dy }
-  next[singleId] = { ...single, x: box.x, y: box.y }
+  const sorted = members.slice().sort(([, a], [, b]) => a.y - b.y)
+  let y = single.y
+  for (let i = 0; i < sorted.length; i++) {
+    const [k, r] = sorted[i]
+    const isLast = i === sorted.length - 1
+    const h = isLast
+      ? single.y + single.h - y // 마지막 멤버가 반올림 잔여분 흡수
+      : Math.max(1, Math.round((r.h / box.h) * single.h))
+    const m = minSize(k)
+    if (single.w < m.w || h < m.h) return null
+    next[k] = { ...r, x: single.x, y, w: single.w, h }
+    y += h
+  }
+  next[singleId] = { ...single, ...box }
   return next
 }
 
@@ -373,7 +389,19 @@ export default function GridLayout() {
         )
       }
 
-      // 4) 그룹 스왑: 상대가 열 밴드의 일원이면 밴드 전체와 교환,
+      // 4) 크기까지 맞바꾸기: 크기가 다른 위젯끼리는 서로의 자리에 맞춰
+      //    위치와 크기를 함께 교환 (양쪽 모두 최소 크기를 만족할 때만)
+      const minA = minSize(d.id)
+      const minB = minSize(otherId)
+      if (other.w >= minA.w && other.h >= minA.h && cur.w >= minB.w && cur.h >= minB.h) {
+        candidates.push({
+          ...draft,
+          [d.id]: { ...cur, x: other.x, y: other.y, w: other.w, h: other.h },
+          [otherId]: { ...other, x: cur.x, y: cur.y, w: cur.w, h: cur.h },
+        })
+      }
+
+      // 5) 그룹 스왑: 상대가 열 밴드의 일원이면 밴드 전체와 교환,
       //    내가 밴드의 일원이면 내 밴드 전체가 상대와 교환
       const bandA = bandSwapCandidate(draft, d.id, otherId)
       if (bandA) candidates.push(bandA)
