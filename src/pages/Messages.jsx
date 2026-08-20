@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "../context/AuthContext"
 import {
-  fetchColleagues,
   sendCheer,
   fetchConversation,
   fetchConversationList,
   markAsRead,
   joinPresence,
   subscribeToCheer,
-  fetchMyFriendCode,
   searchByFriendCode,
-  addFriend,
+  addFriendByCode,
   removeFriend,
   fetchFriends,
 } from "../api/cheers"
@@ -130,7 +128,6 @@ function getNowStatus(entries) {
 export default function Messages() {
   const { user } = useAuth()
   const [conversations, setConversations] = useState([])
-  const [colleagues, setColleagues] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [selectedName, setSelectedName] = useState("")
   const [messages, setMessages] = useState([])
@@ -247,38 +244,6 @@ export default function Messages() {
     }, 60000)
     return () => clearInterval(timer)
   }, [loadConversations])
-
-  // 동료 목록 (새 대화용) + 시간표 상태 로드
-  useEffect(() => {
-    if (!user) return
-    const meta = user.user_metadata || {}
-    if (!meta.atpt_code || !meta.school_code) return
-    ;(async () => {
-      const { data } = await fetchColleagues(meta.atpt_code, meta.school_code, user.id)
-      if (data) {
-        setColleagues(data)
-        const newMap = {}
-        for (const c of data) {
-          if (c.avatar_url) newMap[c.id] = c.avatar_url
-        }
-        setAvatarMap((prev) => ({ ...prev, ...newMap }))
-        // 동료 시간표 상태도 로드
-        const newStatusMap = {}
-        for (const c of data) {
-          try {
-            const { data: tt } = await fetchTimetableByUserId(c.id)
-            if (tt) {
-              const s = getNowStatus(tt)
-              if (s) newStatusMap[c.id] = s
-            }
-          } catch { /* 권한 없으면 무시 */ }
-        }
-        if (Object.keys(newStatusMap).length > 0) {
-          setStatusMap((prev) => ({ ...prev, ...newStatusMap }))
-        }
-      }
-    })()
-  }, [user])
 
   // Presence
   useEffect(() => {
@@ -430,18 +395,25 @@ export default function Messages() {
       )
     : conversations
 
-  // 새 대화 목록 (같은 학교 동료 + 친구 합치기, 중복 제거)
+  // 새 대화 목록: 친구 코드로 추가한 친구 + 이미 대화 중인 상대만.
+  // 같은 학교라는 이유만으로는 목록에 올리지 않습니다.
   const existingPartnerIds = new Set(conversations.map((c) => c.partnerId))
   const allContacts = showNewChat ? (() => {
     const map = new Map()
-    for (const c of colleagues) map.set(c.id, { ...c, source: "school" })
-    for (const f of friends) {
-      if (!map.has(f.id)) map.set(f.id, { ...f, name: f.name, source: "friend" })
+    for (const f of friends) map.set(f.id, { ...f, source: "friend" })
+    for (const c of conversations) {
+      if (map.has(c.partnerId)) continue
+      map.set(c.partnerId, {
+        id: c.partnerId,
+        name: c.partnerName || "알 수 없음",
+        avatar_url: c.partnerAvatar || avatarMap[c.partnerId] || null,
+        source: "chat",
+      })
     }
     let list = [...map.values()]
     if (search.trim()) {
       const kw = search.trim().toLowerCase()
-      list = list.filter((c) => c.name.toLowerCase().includes(kw))
+      list = list.filter((c) => (c.name || "").toLowerCase().includes(kw))
     }
     return list
   })() : []
@@ -471,11 +443,10 @@ export default function Messages() {
     }
   }
 
-  const handleAddFriend = async (friendId) => {
-    const { error } = await addFriend(user.id, friendId)
+  const handleAddFriend = async () => {
+    const { error } = await addFriendByCode(friendCodeInput)
     if (error) {
-      if (error.code === "23505") setFriendMsg({ text: "이미 추가된 친구입니다.", type: "error" })
-      else setFriendMsg({ text: "추가에 실패했어요.", type: "error" })
+      setFriendMsg({ text: error.message || "추가에 실패했어요.", type: "error" })
     } else {
       setFriendMsg({ text: "친구가 추가되었습니다!", type: "success" })
       setFriendSearchResult(null)
@@ -612,7 +583,7 @@ export default function Messages() {
                     <Avatar src={friendSearchResult.avatar_url} name={friendSearchResult.name} size="w-8 h-8" textSize="text-xs" className="bg-primary/10 text-primary" />
                     <span className="text-sm font-medium flex-1 truncate">{friendSearchResult.name}</span>
                     <button
-                      onClick={() => handleAddFriend(friendSearchResult.id)}
+                      onClick={handleAddFriend}
                       className="h-7 px-2.5 rounded-lg bg-primary text-white text-[11px] font-semibold hover:opacity-90 transition shrink-0"
                     >
                       추가
@@ -641,7 +612,9 @@ export default function Messages() {
                 <p className="px-4 py-2 text-xs font-semibold text-gray-400">새 대화 시작</p>
                 {allContacts.length === 0 ? (
                   <p className="px-4 py-6 text-sm text-gray-400 text-center">
-                    {colleagues.length === 0 && friends.length === 0 ? "선생님 목록이 없습니다." : "검색 결과가 없어요."}
+                    {friends.length === 0 && conversations.length === 0
+                      ? "친구 코드로 선생님을 추가해보세요."
+                      : "검색 결과가 없어요."}
                   </p>
                 ) : (
                   allContacts.map((c) => {
@@ -665,17 +638,17 @@ export default function Messages() {
                             {statusMap[c.id] ? (
                               <p className="text-[11px] text-gray-400 truncate">
                                 {statusMap[c.id].emoji} {statusMap[c.id].text}
-                                <span className="text-gray-300"> · {c.source === "friend" ? "친구" : "같은 학교"}</span>
+                                <span className="text-gray-300"> · {c.source === "friend" ? "친구" : "대화 중"}</span>
                               </p>
                             ) : (
                               <p className="text-[11px] text-gray-400">
-                                {c.source === "friend" ? "친구" : "같은 학교"}
-                                {hasConvo ? " · 대화 있음" : ""}
+                                {c.source === "friend" ? "친구" : "대화 중"}
+                                {c.source === "friend" && hasConvo ? " · 대화 있음" : ""}
                               </p>
                             )}
                           </div>
                         </button>
-                        {isFriend && c.source === "friend" && (
+                        {isFriend && (
                           <button
                             onClick={() => handleRemoveFriend(c.id)}
                             className="text-[11px] text-gray-300 hover:text-red-400 transition shrink-0 px-1"

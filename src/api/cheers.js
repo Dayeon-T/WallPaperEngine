@@ -1,16 +1,5 @@
 import { supabase } from "../lib/supabase"
 
-export async function fetchColleagues(atptCode, schoolCode, currentUserId) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, avatar_url")
-    .eq("atpt_code", atptCode)
-    .eq("school_code", schoolCode)
-    .neq("id", currentUserId)
-
-  return { data, error }
-}
-
 export async function sendCheer(fromId, fromName, toId, message) {
   const { error } = await supabase
     .from("cheers")
@@ -177,20 +166,22 @@ export async function fetchMyFriendCode(userId) {
   return data?.friend_code || null
 }
 
+/* 검색과 추가 모두 RPC로만 합니다.
+   같은 학교라는 이유로 서로 노출되지 않도록 profiles 조회를
+   "본인 / 친구 / 이미 대화한 상대"로 제한했기 때문에,
+   아직 친구가 아닌 사람은 이 함수(security definer)로만 찾을 수 있습니다. */
 export async function searchByFriendCode(code) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, avatar_url, friend_code")
-    .eq("friend_code", code.toUpperCase().trim())
-    .single()
-  return { data, error }
+  const { data, error } = await supabase.rpc("find_by_friend_code", {
+    p_code: code.toUpperCase().trim(),
+  })
+  return { data: data?.[0] || null, error }
 }
 
-export async function addFriend(userId, friendId) {
-  const { error } = await supabase
-    .from("friends")
-    .insert({ user_id: userId, friend_id: friendId })
-  return { error }
+export async function addFriendByCode(code) {
+  const { data, error } = await supabase.rpc("add_friend_by_code", {
+    p_code: code.toUpperCase().trim(),
+  })
+  return { data: data?.[0] || null, error }
 }
 
 export async function removeFriend(userId, friendId) {

@@ -48,13 +48,8 @@ alter table public.profiles add column if not exists work_end_time text default 
 
 alter table public.profiles enable row level security;
 
--- 주의: 동료 목록, 친구 코드 검색, 메시지 상대 이름 표시 기능 때문에
--- 로그인한 사용자는 다른 사람의 프로필 행도 읽을 수 있어야 합니다.
--- RLS는 행 단위라 컬럼을 가릴 수 없으므로, 민감한 값을 profiles에 넣지 마세요.
-drop policy if exists "로그인 사용자 프로필 조회" on public.profiles;
-create policy "로그인 사용자 프로필 조회"
-  on public.profiles for select
-  using (auth.uid() is not null);
+-- 프로필 조회(SELECT) 정책은 friends / cheers 테이블을 참조하므로
+-- 그 테이블들을 만든 뒤, 이 파일 아래쪽에서 정의합니다.
 
 drop policy if exists "본인 프로필 생성" on public.profiles;
 create policy "본인 프로필 생성"
@@ -234,15 +229,41 @@ create policy "당사자만 친구관계 조회"
   on public.friends for select
   using (auth.uid() = user_id or auth.uid() = friend_id);
 
+-- 친구 추가에는 INSERT 정책을 두지 않습니다.
+-- 아래 add_friend_by_code() (security definer)를 거쳐야만 친구가 됩니다.
+-- 그래야 사용자 id만 알아내서 임의로 친구를 만드는 일을 막을 수 있습니다.
 drop policy if exists "본인이 친구 추가" on public.friends;
-create policy "본인이 친구 추가"
-  on public.friends for insert
-  with check (auth.uid() = user_id);
 
 drop policy if exists "당사자만 친구 삭제" on public.friends;
 create policy "당사자만 친구 삭제"
   on public.friends for delete
   using (auth.uid() = user_id or auth.uid() = friend_id);
+
+create index if not exists idx_friends_friend on public.friends (friend_id, user_id);
+
+
+-- ───────────── profiles 조회 정책 (friends / cheers 필요) ─────────────
+-- 같은 학교라는 이유만으로 서로 노출되면 안 되므로,
+-- 프로필은 "본인 / 친구 / 이미 쪽지를 주고받은 상대"에게만 보입니다.
+-- 아직 친구가 아닌 사람은 아래 find_by_friend_code() 로만 찾을 수 있습니다.
+-- RLS는 행 단위라 컬럼을 가릴 수 없으므로, 민감한 값을 profiles에 넣지 마세요.
+drop policy if exists "로그인 사용자 프로필 조회" on public.profiles;
+drop policy if exists "본인·친구·대화상대만 프로필 조회" on public.profiles;
+create policy "본인·친구·대화상대만 프로필 조회"
+  on public.profiles for select
+  using (
+    auth.uid() = id
+    or exists (
+      select 1 from public.friends f
+      where (f.user_id = auth.uid() and f.friend_id = profiles.id)
+         or (f.friend_id = auth.uid() and f.user_id = profiles.id)
+    )
+    or exists (
+      select 1 from public.cheers c
+      where (c.from_id = auth.uid() and c.to_id = profiles.id)
+         or (c.to_id = auth.uid() and c.from_id = profiles.id)
+    )
+  );
 
 
 -- ───────────────────── 친구 코드 생성 ─────────────────────
@@ -268,6 +289,72 @@ begin
   return code;
 end;
 $$;
+
+
+-- ───────────────── 친구 코드로 찾기 / 추가 ─────────────────
+-- 친구가 아닌 사람의 프로필은 RLS에 막히므로,
+-- 코드가 정확히 일치할 때만 이름·사진을 돌려줍니다.
+create or replace function public.find_by_friend_code(p_code text)
+returns table (id uuid, name text, avatar_url text)
+language sql
+security definer
+set search_path = public
+as $$
+  select p.id, p.name, p.avatar_url
+  from public.profiles p
+  where auth.uid() is not null
+    and p.friend_code = upper(btrim(p_code))
+    and p.id <> auth.uid()
+  limit 1;
+$$;
+
+revoke execute on function public.find_by_friend_code(text) from anon, public;
+grant execute on function public.find_by_friend_code(text) to authenticated;
+
+
+create or replace function public.add_friend_by_code(p_code text)
+returns table (id uuid, name text, avatar_url text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target public.profiles%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception '로그인이 필요합니다.';
+  end if;
+
+  select * into target
+  from public.profiles p
+  where p.friend_code = upper(btrim(p_code));
+
+  if not found then
+    raise exception '해당 코드의 선생님을 찾을 수 없어요.';
+  end if;
+
+  if target.id = auth.uid() then
+    raise exception '본인의 코드는 추가할 수 없어요.';
+  end if;
+
+  -- 어느 방향으로든 이미 맺어져 있으면 그대로 둡니다.
+  if exists (
+    select 1 from public.friends f
+    where (f.user_id = auth.uid() and f.friend_id = target.id)
+       or (f.user_id = target.id and f.friend_id = auth.uid())
+  ) then
+    raise exception '이미 추가된 친구입니다.';
+  end if;
+
+  insert into public.friends (user_id, friend_id)
+  values (auth.uid(), target.id);
+
+  return query select target.id, target.name, target.avatar_url;
+end;
+$$;
+
+revoke execute on function public.add_friend_by_code(text) from anon, public;
+grant execute on function public.add_friend_by_code(text) to authenticated;
 
 
 -- ───────────────── 가입 시 프로필 자동 생성 ─────────────────
