@@ -64,7 +64,7 @@ export default function CheerButton() {
   }
 
   return (
-    <div className="flex justify-end items-center h-full pr-2">
+    <div className="flex justify-end items-center h-full pr-3">
       <div className="relative">
         <button
           onClick={handleNavigate}
@@ -79,7 +79,7 @@ export default function CheerButton() {
         </button>
 
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[clamp(24px,2.6vw,34px)] h-[clamp(24px,2.6vw,34px)] flex items-center justify-center rounded-full bg-red-500 text-white text-[clamp(0.7rem,0.85vw,1rem)] font-bold px-1.5 pointer-events-none shadow-md ring-2 ring-white">
+          <span className="absolute top-0 right-0 min-w-[clamp(24px,2.6vw,34px)] h-[clamp(24px,2.6vw,34px)] flex items-center justify-center rounded-full bg-red-500 text-white text-[clamp(0.7rem,0.85vw,1rem)] font-bold px-1.5 pointer-events-none shadow-md ring-2 ring-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
