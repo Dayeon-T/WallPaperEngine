@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
-import { fetchInbox } from "../api/cheers"
+import { fetchInbox, subscribeToCheer } from "../api/cheers"
 import { fetchProfileRow } from "../api/settings"
 
 export default function CheerButton() {
@@ -23,6 +23,33 @@ export default function CheerButton() {
   useEffect(() => { loadUnread() }, [loadUnread])
   useEffect(() => { loadAvatar() }, [loadAvatar])
 
+  // 이 화면은 배경화면으로 며칠씩 떠 있으므로, 실시간 수신 하나에만 기대면
+  // 웹소켓이 한 번 끊긴 뒤로 개수가 영영 멈춘다.
+  // (1) 자체 구독 (2) 주기적 재조회 (3) 창 복귀 시 재조회 — 세 겹으로 받는다.
+  useEffect(() => {
+    if (!user) return
+    return subscribeToCheer(user.id, loadUnread, loadUnread)
+  }, [user, loadUnread])
+
+  useEffect(() => {
+    const timer = setInterval(loadUnread, 60000)
+    return () => clearInterval(timer)
+  }, [loadUnread])
+
+  useEffect(() => {
+    const onWake = () => {
+      if (document.visibilityState === "visible") loadUnread()
+    }
+    document.addEventListener("visibilitychange", onWake)
+    window.addEventListener("focus", onWake)
+    window.addEventListener("online", loadUnread)
+    return () => {
+      document.removeEventListener("visibilitychange", onWake)
+      window.removeEventListener("focus", onWake)
+      window.removeEventListener("online", loadUnread)
+    }
+  }, [loadUnread])
+
   useEffect(() => {
     const handler = () => loadUnread()
     window.addEventListener("inbox-update", handler)
@@ -42,7 +69,7 @@ export default function CheerButton() {
   }
 
   return (
-    <div className="flex justify-end items-center h-full">
+    <div className="flex justify-end items-center h-full pr-2">
       <div className="relative">
         <button
           onClick={handleNavigate}
