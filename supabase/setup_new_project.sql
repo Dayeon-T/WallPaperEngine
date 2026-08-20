@@ -39,12 +39,20 @@ create table if not exists public.profiles (
   today_highlight boolean default true,
   work_end_time text default '16:00',            -- 기본 퇴근 시각 (HH:MM)
 
+  -- 동의 기록 (개인정보 보호법 제15조·제22조)
+  terms_agreed_at timestamptz,     -- 이용약관 동의 시각
+  privacy_agreed_at timestamptz,   -- 개인정보 수집·이용 동의 시각
+  policy_version text,             -- 동의 당시 문서 버전 (src/legal/policy.js)
+
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
--- 이미 만들어진 테이블에도 퇴근 시각 컬럼을 채워 넣습니다.
+-- 이미 만들어진 테이블에도 나중에 추가된 컬럼을 채워 넣습니다.
 alter table public.profiles add column if not exists work_end_time text default '16:00';
+alter table public.profiles add column if not exists terms_agreed_at   timestamptz;
+alter table public.profiles add column if not exists privacy_agreed_at timestamptz;
+alter table public.profiles add column if not exists policy_version    text;
 
 alter table public.profiles enable row level security;
 
@@ -359,7 +367,8 @@ grant execute on function public.add_friend_by_code(text) to authenticated;
 
 -- ───────────────── 가입 시 프로필 자동 생성 ─────────────────
 -- SignUp 화면이 보내는 metadata 키와 이름이 일치해야 합니다.
--- (name, school_name, atpt_code, school_code, birthday)
+-- (name, school_name, atpt_code, school_code, birthday,
+--  terms_agreed, privacy_agreed, policy_version)
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -368,7 +377,8 @@ set search_path = public
 as $$
 begin
   insert into public.profiles (
-    id, name, school_name, atpt_code, school_code, birthday, friend_code
+    id, name, school_name, atpt_code, school_code, birthday, friend_code,
+    terms_agreed_at, privacy_agreed_at, policy_version
   )
   values (
     new.id,
@@ -377,7 +387,11 @@ begin
     new.raw_user_meta_data ->> 'atpt_code',
     new.raw_user_meta_data ->> 'school_code',
     nullif(new.raw_user_meta_data ->> 'birthday', '')::date,
-    public.generate_friend_code()
+    public.generate_friend_code(),
+    -- 동의 시각은 클라이언트 값을 쓰지 않고 서버 시계로 기록합니다.
+    case when new.raw_user_meta_data ->> 'terms_agreed'   = 'true' then now() end,
+    case when new.raw_user_meta_data ->> 'privacy_agreed' = 'true' then now() end,
+    new.raw_user_meta_data ->> 'policy_version'
   )
   on conflict (id) do nothing;
   return new;
@@ -388,6 +402,26 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+
+-- ───────────────────── 약관 재동의 ─────────────────────
+-- 동의 절차가 생기기 전에 가입한 계정은 동의 컬럼이 비어 있습니다.
+-- 로그인 후 동의 화면에서 동의하면 이 함수를 호출합니다.
+create or replace function public.agree_to_policies(p_version text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.profiles
+     set terms_agreed_at   = coalesce(terms_agreed_at, now()),
+         privacy_agreed_at = coalesce(privacy_agreed_at, now()),
+         policy_version    = p_version
+   where id = auth.uid();
+$$;
+
+revoke execute on function public.agree_to_policies(text) from anon, public;
+grant execute on function public.agree_to_policies(text) to authenticated;
 
 
 -- ───────────────────── 아이디(이메일) 찾기 ─────────────────────

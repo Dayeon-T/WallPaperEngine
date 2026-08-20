@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route } from 'react-router'
+import { Routes, Route, useLocation } from 'react-router'
 import { useAuth } from "./context/AuthContext"
 import { fetchProfileRow } from "./api/settings"
 import GridLayout from "./layouts/GridLayout"
@@ -10,6 +10,9 @@ import FindPassword from "./pages/FindPassword"
 import ResetPassword from "./pages/ResetPassword"
 import Settings from "./pages/Settings"
 import Messages from "./pages/Messages"
+import Privacy from "./pages/Privacy"
+import Terms from "./pages/Terms"
+import ConsentGate from "./legal/ConsentGate"
 
 function bgPrefsToStyle(prefs) {
   if (!prefs) return {}
@@ -18,6 +21,13 @@ function bgPrefsToStyle(prefs) {
     return { backgroundImage: `url(${prefs.image})`, backgroundSize: "cover", backgroundPosition: "center" }
   return {}
 }
+
+// 동의 화면을 덮으면 안 되는 경로.
+// 약관 전문은 동의 여부를 판단하려고 여는 것이므로 반드시 제외해야 합니다.
+const CONSENT_EXEMPT_PATHS = [
+  "/signin", "/signup", "/find-id", "/find-password", "/reset-password",
+  "/privacy", "/terms",
+]
 
 const SHADOW_MAP = {
   none: "none",
@@ -66,6 +76,7 @@ function applyWidgetStyle(s) {
 
 function App() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
   const [bgStyle, setBgStyle] = useState({})
 
   useEffect(() => {
@@ -99,6 +110,7 @@ function App() {
       className={`fixed inset-0 text-text ${hasCustomBg ? "" : "bg-bg"}`}
       style={hasCustomBg ? bgStyle : undefined}
     >
+      {!CONSENT_EXEMPT_PATHS.includes(pathname) && <ConsentGate />}
       <div className="absolute left-7 right-7 top-7 bottom-16">
         <Routes>
           <Route path="/" element={<GridLayout />} />
@@ -109,6 +121,9 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/messages" element={<Messages />} />
+          {/* 약관·처리방침은 가입 전에도 봐야 하므로 로그인 없이 접근 가능 */}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
         </Routes>
       </div>
     </div>

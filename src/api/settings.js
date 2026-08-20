@@ -58,3 +58,19 @@ export async function deleteOwnAccount() {
   const { error } = await supabase.rpc("delete_own_account")
   return { error }
 }
+
+/* ───── 약관·개인정보 동의 ───── */
+
+export async function fetchConsent(userId) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("terms_agreed_at, privacy_agreed_at, policy_version")
+    .eq("id", userId)
+    .single()
+  return { data, error }
+}
+
+export async function agreeToPolicies(version) {
+  const { error } = await supabase.rpc("agree_to_policies", { p_version: version })
+  return { error }
+}

@@ -2,6 +2,18 @@ import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router"
 import { signUp } from "../api/SignIn"
 import { EDUCATION_OFFICES, searchSchools } from "../api/neis"
+import { POLICY_VERSION, SIGNUP_CONSENT } from "../legal/policy"
+
+// 만 나이. 생년월일을 필수로 받는 목적 중 하나가 만 14세 이상 확인이므로
+// (개인정보 보호법 제22조의2) 가입 단계에서 실제로 검증합니다.
+function koreanAge(birthday) {
+  const b = new Date(birthday)
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const monthDiff = now.getMonth() - b.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < b.getDate())) age--
+  return age
+}
 
 const floatingLabel =
   "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted transition-all peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs"
@@ -26,6 +38,15 @@ export default function SignUp() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  // 개인정보 보호법 제22조: 약관 동의와 개인정보 동의는 각각 따로 받아야 합니다.
+  const [agreeTerms, setAgreeTerms] = useState(false)
+  const [agreePrivacy, setAgreePrivacy] = useState(false)
+  const agreeAll = agreeTerms && agreePrivacy
+  const toggleAll = () => {
+    const next = !agreeAll
+    setAgreeTerms(next)
+    setAgreePrivacy(next)
+  }
 
   const [schoolQuery, setSchoolQuery] = useState("")
   const [schoolResults, setSchoolResults] = useState([])
@@ -95,12 +116,24 @@ export default function SignUp() {
       return
     }
 
-    setLoading(true)
+    if (!form.birthYear || !form.birthMonth || !form.birthDay) {
+      setError("생년월일을 모두 선택해주세요.")
+      return
+    }
 
-    const birthday =
-      form.birthYear && form.birthMonth && form.birthDay
-        ? `${form.birthYear}-${form.birthMonth.padStart(2, "0")}-${form.birthDay.padStart(2, "0")}`
-        : null
+    const birthday = `${form.birthYear}-${form.birthMonth.padStart(2, "0")}-${form.birthDay.padStart(2, "0")}`
+
+    if (koreanAge(birthday) < 14) {
+      setError("만 14세 미만은 가입할 수 없습니다.")
+      return
+    }
+
+    if (!agreeTerms || !agreePrivacy) {
+      setError("필수 항목에 모두 동의해주세요.")
+      return
+    }
+
+    setLoading(true)
 
     const { error, errorMessage } = await signUp(form.email, form.password, {
       name: form.name,
@@ -108,6 +141,10 @@ export default function SignUp() {
       atpt_code: form.atptCode,
       school_code: form.schoolCode,
       birthday,
+      // 동의 사실과 동의한 문서 버전을 남깁니다. 동의 시각은 DB 트리거가 기록합니다.
+      terms_agreed: "true",
+      privacy_agreed: "true",
+      policy_version: POLICY_VERSION,
     })
 
     if (error) {
@@ -290,7 +327,10 @@ export default function SignUp() {
 
             {/* 생일 */}
             <div className="mt-6">
-              <p className="text-xs text-muted mb-2 ml-1">생일</p>
+              <p className="text-xs text-muted mb-2 ml-1">
+                생년월일 <span className="text-primary">(필수)</span>
+                <span className="ml-1 text-muted">· 만 14세 이상만 가입할 수 있습니다</span>
+              </p>
               <div className="flex gap-2">
                 <select
                   className="h-14 flex-1 rounded-lg border border-muted px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-white appearance-none"
@@ -325,12 +365,87 @@ export default function SignUp() {
               </div>
             </div>
 
+            {/* 약관 동의 — 개인정보 보호법 제22조에 따라 항목별로 각각 받습니다.
+                "전체 동의"는 편의 기능일 뿐, 아래 개별 동의가 실제 동의입니다. */}
+            <div className="mt-8 rounded-lg border border-muted">
+              <label className="flex cursor-pointer items-center gap-3 px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={agreeAll}
+                  onChange={toggleAll}
+                />
+                <span className="text-sm font-semibold">전체 동의합니다</span>
+              </label>
+
+              <div className="border-t border-muted px-4 py-3 space-y-3">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                  />
+                  <span className="flex-1 text-sm">
+                    <span className="text-primary font-medium">[필수]</span> 이용약관에 동의합니다
+                  </span>
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs text-muted underline hover:text-primary"
+                  >
+                    전문 보기
+                  </a>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    checked={agreePrivacy}
+                    onChange={(e) => setAgreePrivacy(e.target.checked)}
+                  />
+                  <span className="flex-1 text-sm">
+                    <span className="text-primary font-medium">[필수]</span> 개인정보 수집·이용에 동의합니다
+                  </span>
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs text-muted underline hover:text-primary"
+                  >
+                    전문 보기
+                  </a>
+                </label>
+
+                {/* 제15조 제2항: 목적·항목·보유기간·거부권을 동의 시점에 모두 알려야 합니다 */}
+                <dl className="rounded-md bg-gray-50 px-3 py-2.5 text-xs leading-5 text-gray-600">
+                  <div className="flex gap-2">
+                    <dt className="w-16 shrink-0 font-semibold text-gray-500">수집 목적</dt>
+                    <dd className="flex-1">{SIGNUP_CONSENT.purpose}</dd>
+                  </div>
+                  <div className="mt-1.5 flex gap-2">
+                    <dt className="w-16 shrink-0 font-semibold text-gray-500">수집 항목</dt>
+                    <dd className="flex-1">{SIGNUP_CONSENT.items}</dd>
+                  </div>
+                  <div className="mt-1.5 flex gap-2">
+                    <dt className="w-16 shrink-0 font-semibold text-gray-500">보유 기간</dt>
+                    <dd className="flex-1">{SIGNUP_CONSENT.period}</dd>
+                  </div>
+                  <p className="mt-2 border-t border-gray-200 pt-2 text-gray-500">
+                    {SIGNUP_CONSENT.refusal}
+                  </p>
+                </dl>
+              </div>
+            </div>
+
             {error && (
               <p className="mt-3 text-sm text-red-500">{error}</p>
             )}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreeTerms || !agreePrivacy}
               className="mt-6 w-full rounded-lg bg-primary py-3 text-lg font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {loading ? "가입 중..." : "회원가입"}
@@ -340,6 +455,11 @@ export default function SignUp() {
               <a href="/signin" className="text-primary underline">
                 로그인
               </a>
+            </p>
+            <p className="mt-8 mb-10 text-center text-xs text-muted">
+              <a href="/terms" className="underline hover:text-primary">이용약관</a>
+              <span className="mx-1.5">·</span>
+              <a href="/privacy" className="underline hover:text-primary">개인정보처리방침</a>
             </p>
           </form>
         </div>
