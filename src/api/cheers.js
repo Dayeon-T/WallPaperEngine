@@ -222,9 +222,15 @@ export async function fetchFriends(userId) {
   return profiles || []
 }
 
+// 같은 사용자를 여러 화면이 동시에 구독할 수 있다.
+// 채널 이름이 겹치면 supabase-js가 이미 subscribe()된 채널을 그대로 돌려주고,
+// 거기에 .on()을 붙이는 순간 예외가 나서 앱 전체가 죽는다. 매번 다른 이름을 쓴다.
+let cheerChannelSeq = 0
+
 export function subscribeToCheer(userId, onCheer, onRead) {
+  cheerChannelSeq += 1
   const channel = supabase
-    .channel("cheers:" + userId)
+    .channel(`cheers:${userId}:${cheerChannelSeq}`)
     .on(
       "postgres_changes",
       {

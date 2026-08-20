@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
-import { fetchInbox, subscribeToCheer } from "../api/cheers"
+import { fetchInbox } from "../api/cheers"
 import { fetchProfileRow } from "../api/settings"
 
 export default function CheerButton() {
@@ -23,14 +23,9 @@ export default function CheerButton() {
   useEffect(() => { loadUnread() }, [loadUnread])
   useEffect(() => { loadAvatar() }, [loadAvatar])
 
-  // 이 화면은 배경화면으로 며칠씩 떠 있으므로, 실시간 수신 하나에만 기대면
-  // 웹소켓이 한 번 끊긴 뒤로 개수가 영영 멈춘다.
-  // (1) 자체 구독 (2) 주기적 재조회 (3) 창 복귀 시 재조회 — 세 겹으로 받는다.
-  useEffect(() => {
-    if (!user) return
-    return subscribeToCheer(user.id, loadUnread, loadUnread)
-  }, [user, loadUnread])
-
+  // 실시간 수신은 같은 화면의 CheerToast가 맡아 inbox-update 이벤트를 쏜다.
+  // 다만 이 화면은 배경화면으로 며칠씩 떠 있어 웹소켓이 끊기면 그 이벤트가
+  // 영영 오지 않으므로, 주기적 재조회와 창 복귀 시 재조회를 폴백으로 둔다.
   useEffect(() => {
     const timer = setInterval(loadUnread, 60000)
     return () => clearInterval(timer)
