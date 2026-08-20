@@ -17,7 +17,9 @@ const DEFAULT_PERIOD_SCHEDULE = [
   { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
 ]
 
+// 설정(교시 시간 → 기본 퇴근 시각)에 값이 없을 때 쓰는 기본값
 const DEFAULT_END = "16:00"
+const AFTERSCHOOL_START = 9
 
 function getMondayStr() {
   const d = new Date()
@@ -30,15 +32,15 @@ function getMondayStr() {
   return `${y}${m}${dd}`
 }
 
-function buildBreakSlots(schedule) {
+function buildBreakSlots(periods) {
   const breaks = []
-  for (let i = 1; i < schedule.length - 1; i++) {
-    const cur = schedule[i]
-    const next = schedule[i + 1]
+  for (let i = 0; i < periods.length - 1; i++) {
+    const cur = periods[i]
+    const next = periods[i + 1]
     if (!cur || !next) continue
     if (cur.end !== next.start) {
       const label = cur.label === "점심시간" || next.label === "점심시간" ? "점심시간" :
-        i >= 9 ? "석식시간" : "쉬는 시간"
+        cur.index >= AFTERSCHOOL_START ? "석식시간" : "쉬는 시간"
       breaks.push({ start: cur.end, end: next.start, label })
     }
   }
@@ -74,6 +76,7 @@ export default function NowTime() {
   const [homeroomClass, setHomeroomClass] = useState(null)
   const [tick, setTick] = useState(0)
   const [PERIOD_SCHEDULE, setPeriodSchedule] = useState(DEFAULT_PERIOD_SCHEDULE)
+  const [workEndTime, setWorkEndTime] = useState(DEFAULT_END)
   const [weeklyOverrides, setWeeklyOverrides] = useState({})
 
   const loadData = useCallback(async () => {
@@ -87,6 +90,7 @@ export default function NowTime() {
     if (classResult.data) setClassEntries(classResult.data)
     if (profileResult.data) {
       setHomeroomClass(profileResult.data.homeroom_class || null)
+      setWorkEndTime(profileResult.data.work_end_time || DEFAULT_END)
       const wt = profileResult.data.weekly_timetable
       if (wt && wt.week === getMondayStr() && wt.map) {
         setWeeklyOverrides(wt.map)
@@ -120,8 +124,13 @@ export default function NowTime() {
   }, [])
 
 
-  const enabledSchedule = [null, ...PERIOD_SCHEDULE.slice(1).filter((p) => p?.enabled !== false)]
-  const BREAK_SLOTS = buildBreakSlots(enabledSchedule)
+  // 시간표 entry 의 start_period/end_period 는 "원래 교시 번호" 기준이므로
+  // 비활성 교시를 걸러내되 번호(index)는 그대로 유지한다.
+  const enabledPeriods = PERIOD_SCHEDULE
+    .map((p, i) => (p ? { ...p, index: i } : null))
+    .filter((p) => p && p.enabled !== false)
+  const enabledIndexes = new Set(enabledPeriods.map((p) => p.index))
+  const BREAK_SLOTS = buildBreakSlots(enabledPeriods)
 
   const today = DEBUG_DAY ?? new Date().getDay()
   const dayIndex = today >= 1 && today <= 5 ? today : 0
@@ -131,10 +140,11 @@ export default function NowTime() {
   const isWeekend = dayIndex === 0
 
   let activePeriod = null
-  for (let p = 1; p < enabledSchedule.length; p++) {
-    const s = enabledSchedule[p]
+  let activePeriodLabel = ""
+  for (const s of enabledPeriods) {
     if (current >= timeToMin(s.start) && current < timeToMin(s.end)) {
-      activePeriod = p
+      activePeriod = s.index
+      activePeriodLabel = s.label
       break
     }
   }
@@ -169,20 +179,21 @@ export default function NowTime() {
     }
   }
 
-  const AFTERSCHOOL_START = 9
+  // 방과후가 시간표에 남아 있어도 설정에서 비활성화되어 있으면 퇴근 시간에 반영하지 않는다.
   const latestAfterSchoolPeriod = todayEntries.reduce((max, e) => {
     const ep = e.end_period ?? e.start_period
+    if (!enabledIndexes.has(ep)) return max
     return ep >= AFTERSCHOOL_START && ep > max ? ep : max
   }, 0)
 
-  let endOfDayMin = timeToMin(DEFAULT_END)
+  let endOfDayMin = timeToMin(workEndTime || DEFAULT_END)
   if (latestAfterSchoolPeriod > 0 && PERIOD_SCHEDULE[latestAfterSchoolPeriod]) {
     endOfDayMin = timeToMin(PERIOD_SCHEDULE[latestAfterSchoolPeriod].end)
   }
   const remainingMin = endOfDayMin - current
   const noMoreClasses = current >= endOfDayMin
 
-  const dayStartMin = timeToMin(enabledSchedule[1].start)
+  const dayStartMin = timeToMin(enabledPeriods[0]?.start || DEFAULT_PERIOD_SCHEDULE[1].start)
   let progress = 0
   if (!isWeekend && current >= dayStartMin && endOfDayMin > dayStartMin) {
     progress = Math.min(Math.max((current - dayStartMin) / (endOfDayMin - dayStartMin), 0), 1)
@@ -207,12 +218,12 @@ export default function NowTime() {
     bigText = "쉬는 시간"
     bottomMsg = `오늘 퇴근까지 ${formatRemaining(remainingMin)} 남았어요.`
   } else if (!activeEntry) {
-    bigText = `${enabledSchedule[activePeriod].label} 공강`
+    bigText = `${activePeriodLabel} 공강`
     bottomMsg = `오늘 퇴근까지 ${formatRemaining(remainingMin)} 남았어요.`
   } else {
     const subj = activeEntry.subject || "공강"
     const room = activeEntry.room || ""
-    bigText = `${enabledSchedule[activePeriod].label} ${subj}${room ? ` ${room}` : ""}`
+    bigText = `${activePeriodLabel} ${subj}${room ? ` ${room}` : ""}`
     bottomMsg = `오늘 퇴근까지 ${formatRemaining(remainingMin)} 남았어요.`
   }
 

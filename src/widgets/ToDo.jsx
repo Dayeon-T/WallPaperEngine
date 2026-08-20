@@ -133,7 +133,12 @@ export default function ToDo() {
     const text = input.trim()
     if (!text || !user) return
     const maxPos = todos.length > 0 ? Math.max(...todos.map((t) => t.position ?? 0)) + 1 : 0
-    await addTodo(user.id, text, maxPos, dueDate || null)
+    const { error } = await addTodo(user.id, text, maxPos, dueDate || null)
+    if (error) {
+      console.error(error)
+      alert("할 일을 추가하지 못했습니다: " + error.message)
+      return
+    }
     setInput("")
     setDueDate("")
     await load()

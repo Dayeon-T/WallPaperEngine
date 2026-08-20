@@ -37,10 +37,14 @@ create table if not exists public.profiles (
   layout_mode text,                              -- 'horizontal' | 'vertical'
   schedule_view_mode text default 'week',        -- 'week' | 'month'
   today_highlight boolean default true,
+  work_end_time text default '16:00',            -- 기본 퇴근 시각 (HH:MM)
 
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+-- 이미 만들어진 테이블에도 퇴근 시각 컬럼을 채워 넣습니다.
+alter table public.profiles add column if not exists work_end_time text default '16:00';
 
 alter table public.profiles enable row level security;
 
@@ -71,10 +75,14 @@ create table if not exists public.todos (
   is_done boolean default false,
   is_important boolean not null default false,
   position int default 0,
+  due_date date,
   completed_at timestamptz,
   deleted_at timestamptz,
   created_at timestamptz default now()
 );
+
+-- 이미 만들어진 테이블에도 마감일 컬럼을 채워 넣습니다.
+alter table public.todos add column if not exists due_date date;
 
 alter table public.todos enable row level security;
 

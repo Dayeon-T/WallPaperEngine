@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useNavigate } from "react-router"
 import { useAuth } from "../context/AuthContext"
 import { EDUCATION_OFFICES, searchSchools } from "../api/neis"
 import {
@@ -27,6 +28,8 @@ const DEFAULT_PERIOD_SCHEDULE = [
   { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
 ]
 
+const DEFAULT_WORK_END_TIME = "16:00"
+
 const DEFAULT_QUICK_LINKS = [
   { name: "나이스", url: "https://sen.neis.go.kr/" },
   { name: "에듀파인", url: "https://klef.sen.go.kr/" },
@@ -39,23 +42,82 @@ const BG_PRESETS = [
   "#F3E5F5", "#ECEFF1",
 ]
 
-const SECTIONS = [
-  { id: "profile", label: "프로필 수정" },
-  { id: "weekly-report", label: "주간 리포트" },
-  { id: "password", label: "비밀번호 변경" },
-  { id: "period", label: "교시 시간" },
-  { id: "school-events", label: "학사일정 관리" },
-  { id: "dday", label: "D-Day 관리" },
-  { id: "folders", label: "폴더 이름" },
-  { id: "quicklinks", label: "퀵링크" },
-  { id: "layout", label: "레이아웃" },
-  { id: "background", label: "배경 설정" },
-  { id: "widget-style", label: "위젯 꾸미기" },
-  { id: "changelog", label: "업데이트 내역" },
-  { id: "danger", label: "회원 탈퇴" },
+const CONTACT_EMAIL = "codingnakta@gmail.com"
+
+const SECTION_GROUPS = [
+  {
+    category: "계정",
+    items: [
+      { id: "profile", label: "프로필 수정" },
+      { id: "password", label: "비밀번호 변경" },
+      { id: "danger", label: "회원 탈퇴", danger: true },
+    ],
+  },
+  {
+    category: "학교 · 일정",
+    items: [
+      { id: "period", label: "교시 시간" },
+      { id: "school-events", label: "학사일정 관리" },
+      { id: "dday", label: "D-Day 관리" },
+      { id: "weekly-report", label: "주간 리포트" },
+    ],
+  },
+  {
+    category: "화면 꾸미기",
+    items: [
+      { id: "layout", label: "레이아웃" },
+      { id: "background", label: "배경 설정" },
+      { id: "widget-style", label: "위젯 꾸미기" },
+    ],
+  },
+  {
+    category: "기타",
+    items: [
+      { id: "folders", label: "폴더 이름" },
+      { id: "quicklinks", label: "퀵링크" },
+      { id: "changelog", label: "업데이트 내역" },
+    ],
+  },
 ]
 
 const CHANGELOGS = [
+  {
+    date: "2026.08.20",
+    changes: [
+      "기본 퇴근 시각을 직접 정할 수 있어요. (설정 → 교시 시간 맨 아래)",
+      "설정 메뉴가 계정 / 학교·일정 / 화면 꾸미기 / 기타로 정리되었어요.",
+      "위젯 꾸미기에서 미리보기 배경을 '내 배경'과 '체크무늬'로 바꿔볼 수 있어요.",
+      "할 일에 마감일을 넣으면 저장되지 않던 문제를 고쳤어요.",
+      "기능 추가 문의 메일 주소를 클릭하면 바로 복사돼요.",
+    ],
+  },
+  {
+    date: "2026.08.13",
+    changes: [
+      "서비스 이름이 PLANSCHOOL로 바뀌었어요.",
+      "위젯 크기를 자유롭게 조절할 수 있어요. 크기가 다른 위젯끼리도 자리를 맞바꿀 수 있어요.",
+      "비밀번호 재설정 전용 페이지가 추가되었어요.",
+      "시간표 과목 편집 창이 위젯 밖에서 잘리던 문제를 고쳤어요.",
+      "로그아웃 상태에서 로그인 위젯이 늦게 뜨던 문제를 고쳤어요.",
+    ],
+  },
+  {
+    date: "2026.07.16",
+    changes: [
+      "위젯을 드래그해서 원하는 자리로 옮기고 크기도 조절할 수 있어요. (설정 → 레이아웃 → 편집 모드 열기)",
+      "위젯을 숨기거나 다시 켤 수 있고, 가로·세로 모니터 배치를 따로 저장해요.",
+      "방과후 A/B 교시의 이름을 설정에서 바꿀 수 있어요.",
+      "'지금 이 시각' 위젯의 내용이 잘리던 문제를 고쳤어요.",
+    ],
+  },
+  {
+    date: "2026.04.30",
+    changes: [
+      "날짜를 고를 때 달력이 뜨는 방식으로 바뀌었어요.",
+      "이번주만 바꾼 시간표가 '지금 이 시각' 위젯에도 반영돼요.",
+      "월간 학사일정에서 일정이 많은 날은 점으로 표시해 화면이 넘치지 않아요.",
+    ],
+  },
   {
     date: "2026.04.27",
     changes: [
@@ -129,6 +191,7 @@ const btnPrimary =
 
 export default function Settings() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState("profile")
   const [msg, setMsg] = useState({ text: "", type: "" })
   const showMsg = (text, type = "success") => {
@@ -143,35 +206,74 @@ export default function Settings() {
     <div className="grid h-full grid-cols-[362fr_558fr_558fr_362fr] gap-[1.5vw]">
       <div />
       <div className="col-span-3 flex bg-white rounded-2xl overflow-hidden">
-      <nav className="w-52 shrink-0 border-r border-gray-100 p-6 flex flex-col gap-1">
+      <nav className="w-52 shrink-0 border-r border-gray-100 p-6 flex flex-col gap-1 overflow-y-auto">
+        <button
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+          className="mb-3 -ml-1 flex items-center gap-1 self-start rounded-lg px-2 py-1 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          뒤로가기
+        </button>
         <a href="/" className="text-xl font-black mb-8 block">PLANSCHOOL</a>
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setActiveSection(s.id)}
-            className={`text-left px-4 py-2.5 rounded-lg text-sm transition ${
-              activeSection === s.id
-                ? "bg-primary/10 text-primary font-semibold"
-                : "text-gray-600 hover:bg-gray-50"
+        {SECTION_GROUPS.map((group, gi) => (
+          <div
+            key={group.category}
+            className={`flex flex-col gap-0.5 py-3 ${
+              gi === 0 ? "pt-0" : "border-t border-gray-200"
             }`}
           >
-            {s.label}
-          </button>
+            <p className="px-2 pb-1.5 text-sm font-bold text-gray-800">
+              {group.category}
+            </p>
+            {group.items.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setActiveSection(s.id)}
+                className={`text-left pl-6 pr-3 py-2 rounded-lg text-[13px] transition ${
+                  activeSection === s.id
+                    ? s.danger
+                      ? "bg-red-50 text-red-600 font-semibold"
+                      : "bg-primary/10 text-primary font-semibold"
+                    : s.danger
+                      ? "text-red-500 hover:bg-red-50"
+                      : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         ))}
         <div className="mt-auto pt-4">
-          <p className="text-xs text-gray-700 px-4">기능 추가 문의 : DayeonT</p>
+          <p className="text-xs text-gray-700 px-4">
+            기능 추가 문의 :{" "}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(CONTACT_EMAIL)
+                } catch {
+                  const ta = document.createElement("textarea")
+                  ta.value = CONTACT_EMAIL
+                  document.body.appendChild(ta)
+                  ta.select()
+                  document.execCommand("copy")
+                  document.body.removeChild(ta)
+                }
+                showMsg("이메일 주소가 복사되었습니다")
+              }}
+              className="text-primary hover:underline"
+              title="클릭하면 메일 주소가 복사돼요"
+            >
+              codingnakta
+            </button>
+          </p>
         </div>
       </nav>
 
       <main className="flex-1 p-10 overflow-y-auto">
-        {msg.text && (
-          <div className={`mb-6 rounded-lg px-4 py-3 text-sm ${
-            msg.type === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
-          }`}>
-            {msg.text}
-          </div>
-        )}
-
         {activeSection === "profile" && (
           <ProfileSection user={user} showMsg={showMsg} />
         )}
@@ -213,6 +315,16 @@ export default function Settings() {
         )}
       </main>
       </div>
+
+      {msg.text && (
+        <div
+          className={`fixed bottom-10 left-1/2 z-[100] -translate-x-1/2 rounded-full px-6 py-3 text-sm text-white shadow-lg backdrop-blur-md ${
+            msg.type === "error" ? "bg-red-500/90" : "bg-gray-900/90"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
     </div>
   )
 }
@@ -445,6 +557,7 @@ function PeriodSection({ user, showMsg }) {
   const [schedule, setSchedule] = useState(() =>
     DEFAULT_PERIOD_SCHEDULE.slice(1).map((p) => ({ ...p }))
   )
+  const [workEndTime, setWorkEndTime] = useState(DEFAULT_WORK_END_TIME)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
@@ -463,6 +576,7 @@ function PeriodSection({ user, showMsg }) {
           setSchedule(merged)
         }
       }
+      if (data?.work_end_time) setWorkEndTime(data.work_end_time)
       setLoaded(true)
     })()
   }, [user.id])
@@ -473,13 +587,20 @@ function PeriodSection({ user, showMsg }) {
 
   const handleSave = async () => {
     setSaving(true)
-    const { error } = await upsertProfileRow(user.id, { period_schedule: schedule })
+    const { error } = await upsertProfileRow(user.id, {
+      period_schedule: schedule,
+      work_end_time: workEndTime || DEFAULT_WORK_END_TIME,
+    })
     setSaving(false)
-    showMsg(error ? error.message : "교시 시간이 저장되었습니다.", error ? "error" : "success")
+    if (error) { showMsg(error.message, "error"); return }
+    // '지금 이 시각' 위젯이 새로고침 없이 바뀐 값을 다시 읽도록 알린다
+    window.dispatchEvent(new Event("timetable-change"))
+    showMsg("교시 시간이 저장되었습니다.")
   }
 
   const handleReset = () => {
     setSchedule(DEFAULT_PERIOD_SCHEDULE.slice(1).map((p) => ({ ...p })))
+    setWorkEndTime(DEFAULT_WORK_END_TIME)
   }
 
   if (!loaded) return <p className="text-sm text-gray-400">불러오는 중...</p>
@@ -532,6 +653,20 @@ function PeriodSection({ user, showMsg }) {
             </div>
           ))}
         </div>
+        <div className="mt-8 border-t pt-6">
+          <p className="text-base font-semibold mb-1">기본 퇴근 시각</p>
+          <p className="text-sm text-gray-400 mb-4">
+            '지금 이 시각' 위젯의 &quot;퇴근까지 ○시간 남았어요&quot; 계산 기준입니다.
+            방과후 수업이 있는 날은 그 수업이 끝나는 시각까지 자동으로 늘어납니다.
+          </p>
+          <input
+            type="time"
+            className="h-10 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-primary"
+            value={workEndTime}
+            onChange={(e) => setWorkEndTime(e.target.value)}
+          />
+        </div>
+
         <div className="flex gap-3 mt-6">
           <button className={btnPrimary} disabled={saving} onClick={handleSave}>
             {saving ? "저장 중..." : "저장"}
@@ -1076,8 +1211,30 @@ function hexToRgb(hex) {
   return `${r}, ${g}, ${b}`
 }
 
+function RangeSlider({ min, max, value, onChange, suffix = "" }) {
+  const pct = max > min ? ((value - min) / (max - min)) * 100 : 0
+  return (
+    <>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="range-slider flex-1"
+        style={{ "--pct": `${pct}%` }}
+      />
+      <span className="w-11 shrink-0 text-right text-xs tabular-nums text-gray-400">
+        {value}{suffix}
+      </span>
+    </>
+  )
+}
+
 function WidgetStyleSection({ user, showMsg }) {
   const [style, setStyle] = useState({ ...DEFAULT_WIDGET_STYLE })
+  const [bgPrefs, setBgPrefs] = useState(null)
+  const [previewMode, setPreviewMode] = useState("bg")
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -1087,9 +1244,16 @@ function WidgetStyleSection({ user, showMsg }) {
       if (data?.widget_style) {
         setStyle({ ...DEFAULT_WIDGET_STYLE, ...data.widget_style })
       }
+      setBgPrefs(data?.bg_prefs || null)
       setLoaded(true)
     })()
   }, [user.id])
+
+  useEffect(() => {
+    const handler = (e) => setBgPrefs(e.detail || null)
+    window.addEventListener("bg-change", handler)
+    return () => window.removeEventListener("bg-change", handler)
+  }, [])
 
   const update = (key, value) => {
     setStyle(prev => {
@@ -1141,6 +1305,19 @@ function WidgetStyleSection({ user, showMsg }) {
     backgroundSize: "20px 20px",
   }
 
+  // 실제로 적용해 둔 배경 위에서 투명도/블러를 확인할 수 있도록
+  const myBg =
+    bgPrefs?.type === "color" && bgPrefs.color
+      ? { backgroundColor: bgPrefs.color }
+      : bgPrefs?.type === "image" && bgPrefs.image
+        ? {
+            backgroundImage: `url(${bgPrefs.image})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }
+        : { backgroundColor: "#eee" }
+  const backdropStyle = previewMode === "checker" ? checkerBg : myBg
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-1">위젯 꾸미기</h2>
@@ -1161,17 +1338,13 @@ function WidgetStyleSection({ user, showMsg }) {
               </div>
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">불투명도</label>
-                <input type="range" min={0} max={100} value={style.bgOpacity}
-                  onChange={e => update("bgOpacity", Number(e.target.value))}
-                  className="flex-1 accent-primary" />
-                <span className="text-xs text-gray-500 w-10 text-right">{style.bgOpacity}%</span>
+                <RangeSlider min={0} max={100} value={style.bgOpacity} suffix="%"
+                  onChange={v => update("bgOpacity", v)} />
               </div>
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">블러</label>
-                <input type="range" min={0} max={30} value={style.backdropBlur}
-                  onChange={e => update("backdropBlur", Number(e.target.value))}
-                  className="flex-1 accent-primary" />
-                <span className="text-xs text-gray-500 w-10 text-right">{style.backdropBlur}px</span>
+                <RangeSlider min={0} max={30} value={style.backdropBlur} suffix="px"
+                  onChange={v => update("backdropBlur", v)} />
               </div>
               {style.backdropBlur > 0 && style.bgOpacity > 80 && (
                 <p className="text-xs text-amber-500 ml-24">
@@ -1187,10 +1360,8 @@ function WidgetStyleSection({ user, showMsg }) {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">두께</label>
-                <input type="range" min={0} max={5} value={style.borderWidth}
-                  onChange={e => update("borderWidth", Number(e.target.value))}
-                  className="flex-1 accent-primary" />
-                <span className="text-xs text-gray-500 w-10 text-right">{style.borderWidth}px</span>
+                <RangeSlider min={0} max={5} value={style.borderWidth} suffix="px"
+                  onChange={v => update("borderWidth", v)} />
               </div>
               <div className="flex items-center gap-4">
                 <label className="text-sm text-gray-600 w-20 shrink-0">색상</label>
@@ -1222,10 +1393,8 @@ function WidgetStyleSection({ user, showMsg }) {
           <fieldset>
             <legend className="text-sm font-semibold mb-2">모서리 둥글기</legend>
             <div className="flex items-center gap-4">
-              <input type="range" min={0} max={32} value={style.borderRadius}
-                onChange={e => update("borderRadius", Number(e.target.value))}
-                className="flex-1 accent-primary" />
-              <span className="text-xs text-gray-500 w-10 text-right">{style.borderRadius}px</span>
+              <RangeSlider min={0} max={32} value={style.borderRadius} suffix="px"
+                onChange={v => update("borderRadius", v)} />
             </div>
           </fieldset>
 
@@ -1283,9 +1452,29 @@ function WidgetStyleSection({ user, showMsg }) {
 
         {/* Preview */}
         <div className="w-72 shrink-0 sticky top-10 self-start">
-          <p className="text-sm font-semibold mb-3">미리보기</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold">미리보기</p>
+            <div className="flex rounded-lg border border-gray-200 p-0.5">
+              {[
+                { id: "bg", label: "내 배경" },
+                { id: "checker", label: "체크무늬" },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setPreviewMode(m.id)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] transition ${
+                    previewMode === m.id
+                      ? "bg-primary text-white"
+                      : "text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {/* Widget preview */}
-          <div className="rounded-xl overflow-hidden relative" style={checkerBg}>
+          <div className="rounded-xl overflow-hidden relative p-6" style={backdropStyle}>
             <div className="p-5" style={previewStyle}>
               <p className="text-sm font-semibold mb-1">위젯 미리보기</p>
               <p className="text-xs text-gray-500 mb-3">배경, 테두리, 그림자가<br />이렇게 적용됩니다.</p>
@@ -1297,13 +1486,22 @@ function WidgetStyleSection({ user, showMsg }) {
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-2 mb-3">
-            체크무늬 배경은 투명도 확인용입니다.
+            {previewMode === "bg"
+              ? "설정해 둔 배경 위에 올려 본 모습입니다."
+              : "체크무늬 배경은 투명도 확인용입니다."}
           </p>
 
           {/* Timetable + QuickLink preview */}
           <p className="text-sm font-semibold mb-2">시간표 / 퀵링크 미리보기</p>
-          <div className="rounded-xl overflow-hidden border border-gray-100">
-            <div className="grid grid-cols-4 gap-0.5 p-2" style={{ backgroundColor: previewBg }}>
+          <div className="rounded-xl overflow-hidden border border-gray-100" style={backdropStyle}>
+            <div
+              className="grid grid-cols-4 gap-0.5 p-2"
+              style={{
+                backgroundColor: previewBg,
+                backdropFilter: previewStyle.backdropFilter,
+                WebkitBackdropFilter: previewStyle.WebkitBackdropFilter,
+              }}
+            >
               <div className="rounded-md text-center text-[10px] py-1.5 font-semibold" style={{ backgroundColor: style.ttHeaderBg }} />
               <div className="rounded-md text-center text-[10px] py-1.5 font-semibold" style={{ backgroundColor: style.ttHeaderBg }}>월</div>
               <div className="rounded-md text-center text-[10px] py-1.5 font-semibold text-white" style={{ backgroundColor: style.ttTodayBg }}>화</div>
@@ -1333,7 +1531,8 @@ function WidgetStyleSection({ user, showMsg }) {
 
           {/* ToDo preview */}
           <p className="text-sm font-semibold mb-2 mt-3">할 일 미리보기</p>
-          <div className="rounded-xl overflow-hidden border border-gray-100 p-3" style={previewStyle}>
+          <div className="rounded-xl overflow-hidden p-4" style={backdropStyle}>
+          <div className="p-3" style={previewStyle}>
             <div className="flex gap-1.5 mb-2">
               <div className="flex-1 rounded-lg px-2 py-1.5 text-[10px]"
                 style={{ backgroundColor: style.todoBg, color: style.todoText }}>
@@ -1357,6 +1556,7 @@ function WidgetStyleSection({ user, showMsg }) {
               </span>
               <span className="text-[10px] flex-1 line-through text-gray-400">회의 준비</span>
             </div>
+          </div>
           </div>
 
         </div>
