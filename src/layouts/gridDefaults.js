@@ -61,17 +61,28 @@ export const DEFAULT_LAYOUTS = {
     meals:     { x: 19, y: 4, w: 5, h: 5 },
     schedule:  { x: 19, y: 9, w: 5, h: 7 },
   },
+  // 세로(포트레이트) 모니터용. y는 0부터 시작해 16행을 빈틈없이 채웁니다.
+  // 좌우 2단 구성은 그대로 두고, 위쪽에 비어 있던 4행은 대부분 시간표에 줍니다.
+  // 시계/날씨/급식/학사일정은 높이를 늘리는 대신 가로를 반으로 줄여 자리를 만들었습니다.
+  //        x0 ────── x12 ───── x18 ──── x24
+  //   y0   │ 프로필  │ 시계  │ 날씨  │
+  //   y3   │ 응원    │             │
+  //   y5   │ 폴더    │   시간표     │
+  //   y9   │ 지금    │             │
+  //   y12  │ 할 일   │ 급식  │ 학사일정 │
   vertical: {
-    profile:   { x: 0,  y: 4,  w: 12, h: 3 },
-    clock:     { x: 12, y: 4,  w: 12, h: 3 },
-    cheer:     { x: 0,  y: 7,  w: 12, h: 2 },
-    weather:   { x: 12, y: 7,  w: 12, h: 2 },
-    folders:   { x: 0,  y: 9,  w: 12, h: 2 },
-    timetable: { x: 12, y: 9,  w: 12, h: 3 },
-    nowtime:   { x: 0,  y: 11, w: 12, h: 2 },
-    todo:      { x: 0,  y: 13, w: 12, h: 3 },
-    meals:     { x: 12, y: 12, w: 12, h: 2 },
-    schedule:  { x: 12, y: 14, w: 12, h: 2 },
+    // 왼쪽 단
+    profile:   { x: 0,  y: 0,  w: 12, h: 3 },
+    cheer:     { x: 0,  y: 3,  w: 12, h: 2 },
+    folders:   { x: 0,  y: 5,  w: 12, h: 4 },
+    nowtime:   { x: 0,  y: 9,  w: 12, h: 3 },
+    todo:      { x: 0,  y: 12, w: 12, h: 4 },
+    // 오른쪽 단
+    clock:     { x: 12, y: 0,  w: 6,  h: 3 },
+    weather:   { x: 18, y: 0,  w: 6,  h: 3 },
+    timetable: { x: 12, y: 3,  w: 12, h: 9 },
+    meals:     { x: 12, y: 12, w: 6,  h: 4 },
+    schedule:  { x: 18, y: 12, w: 6,  h: 4 },
   },
 }
 
