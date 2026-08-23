@@ -65,6 +65,11 @@ export default function Timetable() {
         setWeeklyOverrides(wt.map)
       } else {
         setWeeklyOverrides({})
+        // 지난주 교환 기록은 더 이상 쓰이지 않는다. 남겨두면 언제 만들어진
+        // 값인지 알 수 없어 문제가 생겼을 때 추적이 어렵다.
+        if (!isClass && wt && wt.week !== getMondayStr()) {
+          upsertProfileRow(user.id, { weekly_timetable: null })
+        }
       }
     }
   }, [user, tab])
@@ -181,21 +186,39 @@ export default function Timetable() {
     setSelectedCell(null)
   }
 
+  // 직접 고친 칸은 '이번주 교환' 기록보다 우선한다.
+  // 교환으로 비운 칸(null 오버라이드)이 남아 있으면 새로 입력한 과목이 저장은 되고도
+  // 화면에는 계속 빈 칸으로 보인다.
+  const clearWeeklyOverridesFor = async (day, startPeriod, endPeriod) => {
+    if (tab === "class") return
+    const keys = []
+    for (let p = startPeriod; p <= endPeriod; p++) keys.push(`${day}-${p}`)
+    if (!keys.some((k) => k in weeklyOverrides)) return
+
+    const next = { ...weeklyOverrides }
+    for (const k of keys) delete next[k]
+    await saveWeeklyOverrides(next)
+  }
+
   const handleSave = async (day, period, updates) => {
     if (!user) { setEditingCell(null); return }
     const existing = baseEntryMap[`${day}-${period}`]
 
     try {
       if (!updates.subject && !existing) {
-        setEditingCell(null)
         return
       }
 
       if (!updates.subject && existing) {
-        await deleteTimetableEntry(existing.id)
+        const { error } = await deleteTimetableEntry(existing.id)
+        if (error) {
+          alert("시간표를 지우지 못했습니다: " + error.message)
+          return
+        }
+        // 프로필을 먼저 정리해야 뒤이은 loadTimetable이 옛 값을 다시 읽어오지 않는다.
+        await clearWeeklyOverridesFor(day, existing.start_period, existing.end_period)
         await loadTimetable()
         window.dispatchEvent(new Event("timetable-change"))
-        setEditingCell(null)
         return
       }
 
@@ -211,7 +234,15 @@ export default function Timetable() {
       }
       if (existing?.id) entry.id = existing.id
 
-      await upsertTimetableEntry(entry)
+      const { error } = await upsertTimetableEntry(entry)
+      if (error) {
+        alert("시간표를 저장하지 못했습니다: " + error.message)
+        return
+      }
+
+      // 블록타임을 한 칸으로 줄인 경우까지 감안해 예전 범위도 함께 정리한다.
+      const clearUntil = Math.max(entry.end_period, existing?.end_period ?? entry.end_period)
+      await clearWeeklyOverridesFor(day, entry.start_period, clearUntil)
       await loadTimetable()
       window.dispatchEvent(new Event("timetable-change"))
     } finally {
@@ -277,6 +308,8 @@ export default function Timetable() {
       const span = !swapMode && entry ? getSpan(day, row - 1) : 1
       const isEditing = editingCell === cellKey
       const isSelected = swapMode && selectedCell === cellKey
+      // 블록타임은 '다음 교시'가 아니라 '화면에 보이는 다음 교시'와 묶어야 한다.
+      const nextPeriod = visiblePeriods[row]?.originalIndex ?? null
 
       cells.push(
         <TimeBlock
@@ -292,7 +325,9 @@ export default function Timetable() {
           onClick={swapMode ? () => handleSwapClick(cellKey) : undefined}
           onSave={(updates) => handleSave(day, period, updates)}
           currentEntry={entry}
-          row={row}
+          period={period}
+          nextPeriod={nextPeriod}
+          isOverride={tab === "personal" && weeklyOverrides[cellKey] !== undefined}
           isToday={isToday}
         />
       )
@@ -328,12 +363,15 @@ export default function Timetable() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {tab === "personal" && swapMode && hasOverrides && (
+          {/* 편집 모드 밖에서도 보여야 한다. 이번주만 바꾼 칸이 남아 있는 줄 모르면
+              새로 입력한 과목이 왜 안 보이는지 알 길이 없다. */}
+          {tab === "personal" && hasOverrides && (
             <button
               onClick={handleResetWeekly}
+              title="이번주만 바꾼 칸을 원래 시간표로 되돌립니다"
               className="text-[clamp(0.5rem,0.6vw,0.7rem)] text-gray-400 hover:text-red-500 transition-colors"
             >
-              초기화
+              ↺ 이번주 변경
             </button>
           )}
           {tab === "personal" && (

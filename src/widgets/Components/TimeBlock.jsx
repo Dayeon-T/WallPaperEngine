@@ -22,7 +22,9 @@ export default function TimeBlock({
   onClick,
   onSave,
   currentEntry,
-  row,
+  period,
+  nextPeriod = null,
+  isOverride = false,
 }) {
   const [subject, setSubject] = useState(label || "")
   const [room, setRoom] = useState(roomProp || "")
@@ -72,6 +74,15 @@ export default function TimeBlock({
     return () => window.removeEventListener("resize", place)
   }, [isEditing])
 
+  // 저장할 end_period. 예전에는 화면 행 번호(row)를 폴백으로 썼는데, 설정에서 교시를
+  // 끄면 행 번호와 교시 번호가 어긋나 end_period < start_period가 되고
+  // DB의 period_order 제약에 걸려 저장이 조용히 실패했다.
+  const computeEndPeriod = () => {
+    const start = currentEntry?.start_period ?? period
+    if (!mergeNext || !nextPeriod) return start
+    return Math.max(start, nextPeriod)
+  }
+
   useEffect(() => {
     if (!isEditing) return
     function handleClickOutside(e) {
@@ -79,14 +90,11 @@ export default function TimeBlock({
       const insideCell = ref.current?.contains(e.target)
       const insidePopup = popupRef.current?.contains(e.target)
       if (!insideCell && !insidePopup) {
-        const endPeriod = mergeNext
-          ? (currentEntry?.start_period ?? row) + 1
-          : (currentEntry?.start_period ?? row)
         onSave?.({
           subject,
           room,
           color,
-          end_period: endPeriod,
+          end_period: computeEndPeriod(),
         })
       }
     }
@@ -127,6 +135,14 @@ export default function TimeBlock({
       onDoubleClick={onDoubleClick}
       onClick={onClick}
     >
+      {/* 이번주만 바뀐 칸임을 알린다. 표시가 없으면 비어 있는 칸이 '교환으로 비운 칸'인지
+          '아직 안 채운 칸'인지 구분할 수 없다. */}
+      {isOverride && !isEditing && (
+        <span
+          className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary/40"
+          title="이번주만 변경된 칸"
+        />
+      )}
       {label && (
         <p className="text-[clamp(0.7rem,0.8vw,1rem)] font-semibold leading-tight relative">{label}</p>
       )}
@@ -187,7 +203,7 @@ export default function TimeBlock({
               />
             </label>
           </div>
-          {row < 10 && (
+          {nextPeriod && (
             <label className="flex items-center justify-center gap-1.5 text-xs text-muted cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -200,12 +216,7 @@ export default function TimeBlock({
           )}
           <button
             className="w-full rounded-lg bg-primary text-white text-xs font-semibold py-2 transition hover:opacity-90"
-            onClick={() => {
-              const endPeriod = mergeNext
-                ? (currentEntry?.start_period ?? row) + 1
-                : (currentEntry?.start_period ?? row)
-              onSave?.({ subject, room, color, end_period: endPeriod })
-            }}
+            onClick={() => onSave?.({ subject, room, color, end_period: computeEndPeriod() })}
           >
             확인
           </button>

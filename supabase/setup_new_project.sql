@@ -116,13 +116,19 @@ create table if not exists public.timetable (
   subject text default '',
   room text default '',
   color text default '#EBEBEB',
-  is_class boolean default false,   -- true면 학급 시간표
+  is_class boolean not null default false,   -- true면 학급 시간표
   created_at timestamptz default now(),
   constraint day_range check (day between 1 and 5),
   constraint period_range check (start_period between 1 and 10 and end_period between 1 and 10),
   constraint period_order check (end_period >= start_period),
   constraint timetable_unique_class unique (user_id, day, start_period, is_class)
 );
+
+-- is_class 가 NULL 이면 클라이언트 조회(.eq("is_class", false))에 안 잡히면서
+-- unique 충돌만 일으키는 '유령 행'이 된다. 기존 테이블에도 NOT NULL 을 채워 넣는다.
+update public.timetable set is_class = false where is_class is null;
+alter table public.timetable alter column is_class set default false;
+alter table public.timetable alter column is_class set not null;
 
 alter table public.timetable enable row level security;
 
