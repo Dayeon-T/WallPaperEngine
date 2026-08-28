@@ -198,6 +198,13 @@ function BoardScreen({ view, now, onDisconnect }) {
 
   return (
     <div className="fixed inset-0 bg-gray-900 text-white flex flex-col overflow-hidden">
+      {/* 선생님 말씀: 있을 때만 맨 위에 크게 */}
+      {view.notice && (
+        <div className="shrink-0 bg-amber-400 text-gray-900 px-[3vw] py-[1vw]">
+          <p className="text-[2vw] font-extrabold">📢 {view.notice}</p>
+        </div>
+      )}
+
       {/* 상단 바: 학급명 · 날짜 · 시계 · 현재 교시 */}
       <div className="flex items-center justify-between px-[3vw] py-[1.2vw] border-b border-gray-800 shrink-0">
         <div className="flex items-baseline gap-[1.5vw]">
@@ -224,13 +231,6 @@ function BoardScreen({ view, now, onDisconnect }) {
           <DDayPane events={view.dday_events || []} now={now} />
         </div>
       </div>
-
-      {/* 공지: 있을 때만 하단에 크게 */}
-      {view.notice && (
-        <div className="shrink-0 bg-amber-400 text-gray-900 px-[3vw] py-[1vw]">
-          <p className="text-[2vw] font-extrabold">📢 {view.notice}</p>
-        </div>
-      )}
 
       <button
         onClick={onDisconnect}
