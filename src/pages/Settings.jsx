@@ -15,7 +15,7 @@ import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
 
 import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
-import { fetchMyBoard, issueBoardCode, deleteMyBoard } from "../api/board"
+import { fetchMyBoard, issueBoardCode, deleteMyBoard, signalBoardCode } from "../api/board"
 
 const DEFAULT_QUICK_LINKS = [
   { name: "나이스", url: "https://sen.neis.go.kr/" },
@@ -715,20 +715,26 @@ function ClassroomSection({ user, showMsg }) {
       "코드를 재발급하면 이전 코드는 즉시 무효가 됩니다.\n전자칠판에 새 코드를 다시 입력해야 해요. 계속할까요?"
     )) return
     setWorking(true)
+    const oldCode = board?.board_code
     const { data, error } = await issueBoardCode()
     setWorking(false)
     if (error) { showMsg(error.message, "error"); return }
     setBoard((prev) => ({ ...(prev || {}), board_code: data }))
+    // 이전 코드로 연결된 칠판이 즉시 연결 화면으로 돌아가도록 알린다
+    if (oldCode && oldCode !== data) signalBoardCode(oldCode)
     showMsg(regenerate ? "코드가 재발급되었습니다." : "교실 코드가 만들어졌습니다.")
   }
 
   const handleDelete = async () => {
     if (!window.confirm("교실 화면 연결을 끊을까요?\n전자칠판에는 더 이상 학급 정보가 표시되지 않습니다.")) return
     setWorking(true)
+    const oldCode = board?.board_code
     const { error } = await deleteMyBoard(user.id)
     setWorking(false)
     if (error) { showMsg(error.message, "error"); return }
     setBoard(null)
+    // 칠판이 즉시 연결 화면으로 돌아가도록 알린다
+    if (oldCode) signalBoardCode(oldCode)
     showMsg("교실 화면 연결이 해제되었습니다.")
   }
 

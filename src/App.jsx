@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router'
 import { useAuth } from "./context/AuthContext"
 import { fetchProfileRow } from "./api/settings"
+import { notifyBoardRefresh } from "./api/board"
 import GridLayout from "./layouts/GridLayout"
 import SignIn from "./pages/SignIn"
 import SignUp from "./pages/SignUp"
@@ -93,6 +94,24 @@ function App() {
       if (data?.bg_prefs) setBgStyle(bgPrefsToStyle(data.bg_prefs))
       applyWidgetStyle(data?.widget_style || null)
     })()
+  }, [user])
+
+  // 칠판에 표시되는 데이터가 바뀌면 board 채널로 갱신 신호를 보낸다.
+  // 각 위젯·설정이 이미 쏘는 window 이벤트에 편승하므로 변경 지점을 일일이 알 필요가 없다.
+  useEffect(() => {
+    if (!user) return
+    const events = ["timetable-change", "school-events-change", "dday-change", "homeroom-change", "board-change"]
+    let timer = null
+    const handler = () => {
+      // 연속 수정(시간표 여러 칸 등)을 1초에 한 번으로 묶는다
+      clearTimeout(timer)
+      timer = setTimeout(() => notifyBoardRefresh(user.id), 1000)
+    }
+    events.forEach((e) => window.addEventListener(e, handler))
+    return () => {
+      clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, handler))
+    }
   }, [user])
 
   useEffect(() => {

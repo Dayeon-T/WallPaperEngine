@@ -9,8 +9,9 @@ import {
 
 // 칠판이 재부팅 후에도 같은 학급으로 복귀하도록 코드를 기기에 저장한다.
 const CODE_KEY = "board_code"
-// 3단계(Realtime broadcast) 전까지는 폴링으로 변경사항을 반영한다.
-const REFRESH_MS = 60000
+// 변경은 Realtime broadcast로 즉시 반영된다. 폴링은 웹소켓이 조용히 끊겼을 때의
+// 폴백이다 — 칠판은 며칠씩 켜져 있어 끊김을 전제해야 한다. (CheerButton과 같은 이유)
+const FALLBACK_REFRESH_MS = 5 * 60 * 1000
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -109,13 +110,29 @@ export default function Board() {
     })()
   }, [connect])
 
-  // 연결 중에는 주기적으로 다시 읽어 시간표·공지 변경을 반영한다
+  // 교사 쪽 변경 신호를 실시간으로 받는다. 신호에는 데이터가 없고,
+  // 받으면 RPC를 다시 호출한다 (채널을 엿들어도 얻는 게 없다).
   useEffect(() => {
     if (phase !== "connected" || !activeCode) return
-    const timer = setInterval(() => {
-      connect(activeCode, { silent: true, persist: false })
-    }, REFRESH_MS)
-    return () => clearInterval(timer)
+    const channel = supabase
+      .channel(`board:${activeCode}`)
+      .on("broadcast", { event: "refresh" }, () => {
+        connect(activeCode, { silent: true, persist: false })
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [phase, activeCode, connect])
+
+  // 폴백: 주기 재조회 + 네트워크 복구 시 재조회
+  useEffect(() => {
+    if (phase !== "connected" || !activeCode) return
+    const refresh = () => connect(activeCode, { silent: true, persist: false })
+    const timer = setInterval(refresh, FALLBACK_REFRESH_MS)
+    window.addEventListener("online", refresh)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener("online", refresh)
+    }
   }, [phase, activeCode, connect])
 
   useEffect(() => {
