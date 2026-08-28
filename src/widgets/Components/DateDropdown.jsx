@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
@@ -56,13 +56,20 @@ export default function DateDropdown({ value, onChange, size = "default", defaul
 
     const pickerWidth = 280
     const gap = 8
+    const margin = 12
+    // 처음 열 때는 달력이 아직 렌더되기 전이라 어림값을 쓰고,
+    // 렌더된 뒤(아래 useLayoutEffect) 실제 높이로 한 번 더 보정한다.
+    const pickerHeight = pickerRef.current?.getBoundingClientRect().height ?? 340
+
     const left = Math.min(
-      Math.max(12, rect.left),
-      Math.max(12, window.innerWidth - pickerWidth - 12)
+      Math.max(margin, rect.left),
+      Math.max(margin, window.innerWidth - pickerWidth - margin)
     )
     const bottomSpace = window.innerHeight - rect.bottom
-    const opensUp = bottomSpace < 320 && rect.top > bottomSpace
-    const top = opensUp ? Math.max(12, rect.top - 306 - gap) : rect.bottom + gap
+    const opensUp = bottomSpace < pickerHeight + gap + margin && rect.top > bottomSpace
+    let top = opensUp ? rect.top - pickerHeight - gap : rect.bottom + gap
+    // 위로 띄워도 모자라면 화면 안쪽으로 밀어 넣어 잘리지 않게 한다.
+    top = Math.min(Math.max(top, margin), Math.max(margin, window.innerHeight - pickerHeight - margin))
 
     setPickerStyle({ left, top, width: pickerWidth })
   }
@@ -72,6 +79,14 @@ export default function DateDropdown({ value, onChange, size = "default", defaul
     setIsOpen(true)
     requestAnimationFrame(updatePosition)
   }
+
+  // 달력이 실제로 렌더된 뒤 실제 높이로 위치를 다시 잡는다.
+  // (처음 updatePosition이 돌 때는 달력이 없어서 높이를 어림값으로 계산한다)
+  const hasPickerStyle = pickerStyle !== null
+  useLayoutEffect(() => {
+    if (isOpen && hasPickerStyle) updatePosition()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, hasPickerStyle])
 
   useEffect(() => {
     if (!isOpen) return
