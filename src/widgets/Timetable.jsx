@@ -37,9 +37,12 @@ export default function Timetable() {
   const [highlightToday, setHighlightToday] = useState(true)
   const [swapMode, setSwapMode] = useState(false)
   const [selectedCell, setSelectedCell] = useState(null)
-  const [weeklyOverrides, setWeeklyOverrides] = useState({})
+  // 내 시간표(map)와 학급 시간표(classMap)의 이번주 교환 기록을 한 컬럼에 함께 저장한다.
+  const [weeklyMaps, setWeeklyMaps] = useState({ map: {}, classMap: {} })
   const [tab, setTab] = useState("personal")
   const [homeroomClass, setHomeroomClass] = useState(null)
+
+  const weeklyOverrides = tab === "class" ? weeklyMaps.classMap : weeklyMaps.map
 
   const loadTimetable = useCallback(async () => {
     if (!user) return
@@ -61,13 +64,13 @@ export default function Timetable() {
         })))
       }
       const wt = profileResult.data.weekly_timetable
-      if (!isClass && wt && wt.week === getMondayStr() && wt.map) {
-        setWeeklyOverrides(wt.map)
+      if (wt && wt.week === getMondayStr()) {
+        setWeeklyMaps({ map: wt.map || {}, classMap: wt.classMap || {} })
       } else {
-        setWeeklyOverrides({})
+        setWeeklyMaps({ map: {}, classMap: {} })
         // 지난주 교환 기록은 더 이상 쓰이지 않는다. 남겨두면 언제 만들어진
         // 값인지 알 수 없어 문제가 생겼을 때 추적이 어렵다.
-        if (!isClass && wt && wt.week !== getMondayStr()) {
+        if (wt) {
           upsertProfileRow(user.id, { weekly_timetable: null })
         }
       }
@@ -131,8 +134,10 @@ export default function Timetable() {
 
   const saveWeeklyOverrides = async (newMap) => {
     if (!user) return
-    const wt = { week: getMondayStr(), map: newMap }
-    setWeeklyOverrides(newMap)
+    const mapKey = tab === "class" ? "classMap" : "map"
+    const nextMaps = { ...weeklyMaps, [mapKey]: newMap }
+    setWeeklyMaps(nextMaps)
+    const wt = { week: getMondayStr(), map: nextMaps.map, classMap: nextMaps.classMap }
     await upsertProfileRow(user.id, { weekly_timetable: wt })
     window.dispatchEvent(new Event("timetable-change"))
   }
@@ -190,7 +195,6 @@ export default function Timetable() {
   // 교환으로 비운 칸(null 오버라이드)이 남아 있으면 새로 입력한 과목이 저장은 되고도
   // 화면에는 계속 빈 칸으로 보인다.
   const clearWeeklyOverridesFor = async (day, startPeriod, endPeriod) => {
-    if (tab === "class") return
     const keys = []
     for (let p = startPeriod; p <= endPeriod; p++) keys.push(`${day}-${p}`)
     if (!keys.some((k) => k in weeklyOverrides)) return
@@ -206,6 +210,8 @@ export default function Timetable() {
 
     try {
       if (!updates.subject && !existing) {
+        // 기본 시간표엔 없지만 교환으로 채워진 칸이라면, 그 기록을 지워 빈 칸으로 되돌린다.
+        await clearWeeklyOverridesFor(day, period, period)
         return
       }
 
@@ -327,7 +333,7 @@ export default function Timetable() {
           currentEntry={entry}
           period={period}
           nextPeriod={nextPeriod}
-          isOverride={tab === "personal" && weeklyOverrides[cellKey] !== undefined}
+          isOverride={weeklyOverrides[cellKey] !== undefined}
           isToday={isToday}
         />
       )
@@ -365,7 +371,7 @@ export default function Timetable() {
         <div className="flex items-center gap-2">
           {/* 편집 모드 밖에서도 보여야 한다. 이번주만 바꾼 칸이 남아 있는 줄 모르면
               새로 입력한 과목이 왜 안 보이는지 알 길이 없다. */}
-          {tab === "personal" && hasOverrides && (
+          {hasOverrides && (
             <button
               onClick={handleResetWeekly}
               title="이번주만 바꾼 칸을 원래 시간표로 되돌립니다"
@@ -374,18 +380,16 @@ export default function Timetable() {
               ↺ 이번주 변경
             </button>
           )}
-          {tab === "personal" && (
-            <button
-              onClick={() => { setSwapMode(!swapMode); setSelectedCell(null) }}
-              className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
-                swapMode
-                  ? "bg-primary text-white"
-                  : "text-muted hover:bg-gray-100"
-              }`}
-            >
-              {swapMode ? "편집 완료" : "이번주 편집"}
-            </button>
-          )}
+          <button
+            onClick={() => { setSwapMode(!swapMode); setSelectedCell(null) }}
+            className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
+              swapMode
+                ? "bg-primary text-white"
+                : "text-muted hover:bg-gray-100"
+            }`}
+          >
+            {swapMode ? "편집 완료" : "이번주 편집"}
+          </button>
         </div>
       </div>
       {swapMode && (

@@ -78,6 +78,7 @@ export default function NowTime() {
   const [PERIOD_SCHEDULE, setPeriodSchedule] = useState(DEFAULT_PERIOD_SCHEDULE)
   const [workEndTime, setWorkEndTime] = useState(DEFAULT_END)
   const [weeklyOverrides, setWeeklyOverrides] = useState({})
+  const [classOverrides, setClassOverrides] = useState({})
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -92,10 +93,12 @@ export default function NowTime() {
       setHomeroomClass(profileResult.data.homeroom_class || null)
       setWorkEndTime(profileResult.data.work_end_time || DEFAULT_END)
       const wt = profileResult.data.weekly_timetable
-      if (wt && wt.week === getMondayStr() && wt.map) {
-        setWeeklyOverrides(wt.map)
+      if (wt && wt.week === getMondayStr()) {
+        setWeeklyOverrides(wt.map || {})
+        setClassOverrides(wt.classMap || {})
       } else {
         setWeeklyOverrides({})
+        setClassOverrides({})
       }
       const saved = profileResult.data.period_schedule
       if (Array.isArray(saved) && saved.length > 0) {
@@ -165,7 +168,9 @@ export default function NowTime() {
 
   const todayClassEntries = classEntries.filter((e) => e.day === dayIndex)
   const activeClassEntry = activePeriod
-    ? todayClassEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+    ? classOverrides[`${dayIndex}-${activePeriod}`] !== undefined
+      ? classOverrides[`${dayIndex}-${activePeriod}`]
+      : todayClassEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
     : null
 
   let classLineText = ""
