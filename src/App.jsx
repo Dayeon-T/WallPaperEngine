@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router'
 import { useAuth } from "./context/AuthContext"
 import { fetchProfileRow } from "./api/settings"
@@ -13,6 +13,9 @@ import Messages from "./pages/Messages"
 import Privacy from "./pages/Privacy"
 import Terms from "./pages/Terms"
 import ConsentGate from "./legal/ConsentGate"
+
+// 교실 전자칠판 화면. 대시보드와 번들을 분리한다.
+const Board = lazy(() => import("./pages/Board"))
 
 function bgPrefsToStyle(prefs) {
   if (!prefs) return {}
@@ -102,6 +105,16 @@ function App() {
       window.removeEventListener("widget-style-change", wsHandler)
     }
   }, [])
+
+  // 칠판은 교사 대시보드의 배경·여백·동의 화면과 무관한 전체 화면이다.
+  // 대시보드로 통하는 요소가 함께 렌더되지 않도록 셸 바깥에서 그린다.
+  if (pathname === "/board") {
+    return (
+      <Suspense fallback={null}>
+        <Board />
+      </Suspense>
+    )
+  }
 
   const hasCustomBg = bgStyle.backgroundColor || bgStyle.backgroundImage
 
