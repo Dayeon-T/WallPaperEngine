@@ -12,6 +12,7 @@ import {
   removeFriend,
   fetchFriends,
 } from "../api/cheers"
+import { timeToMin, mergePeriodSchedule, getEnabledPeriods, findCurrentPeriod } from "../lib/periods"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
 import { fetchTimetableByUserId } from "../api/timetable"
 
@@ -35,39 +36,6 @@ function Avatar({ src, name, size = "w-10 h-10", textSize = "text-sm", className
   )
 }
 
-const DEFAULT_PERIOD_SCHEDULE = [
-  null,
-  { label: "1교시", start: "08:20", end: "09:10", enabled: true },
-  { label: "2교시", start: "09:20", end: "10:10", enabled: true },
-  { label: "3교시", start: "10:20", end: "11:10", enabled: true },
-  { label: "4교시", start: "11:20", end: "12:10", enabled: true },
-  { label: "점심시간", start: "12:10", end: "13:00", enabled: true },
-  { label: "5교시", start: "13:00", end: "13:50", enabled: true },
-  { label: "6교시", start: "14:00", end: "14:50", enabled: true },
-  { label: "7교시", start: "15:00", end: "15:50", enabled: true },
-  { label: "방과후 A", start: "16:30", end: "17:20", enabled: false },
-  { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
-]
-
-function timeToMin(str) {
-  const [h, m] = str.split(":").map(Number)
-  return h * 60 + m
-}
-
-// 그 사람이 설정(교시 시간)에서 바꾼 값을 기본 교시표 위에 덮어쓴다.
-function buildSchedule(saved) {
-  if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_PERIOD_SCHEDULE
-  return [
-    null,
-    ...DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
-      label: saved[i]?.label || def.label,
-      start: saved[i]?.start || def.start,
-      end: saved[i]?.end || def.end,
-      enabled: saved[i]?.enabled ?? def.enabled,
-    })),
-  ]
-}
-
 function getNowStatus(entries, periodSchedule) {
   if (!entries || entries.length === 0) return null // 시간표 없으면 표시 안 함
 
@@ -75,11 +43,8 @@ function getNowStatus(entries, periodSchedule) {
   const dayIndex = now.getDay()
   if (dayIndex === 0 || dayIndex === 6) return { text: "주말", emoji: "🏖️" }
 
-  // 교시 번호(index)는 유지한 채 활성 교시만 남긴다.
-  // entry의 start_period/end_period가 원래 교시 번호 기준이기 때문이다.
-  const enabled = buildSchedule(periodSchedule)
-    .map((p, i) => (p ? { ...p, index: i } : null))
-    .filter((p) => p && p.enabled !== false)
+  // 그 사람이 설정(교시 시간)에서 바꾼 값을 기본 교시표 위에 덮어쓴 뒤 활성 교시만 남긴다.
+  const enabled = getEnabledPeriods(mergePeriodSchedule(periodSchedule))
   if (enabled.length === 0) return null
 
   const current = now.getHours() * 60 + now.getMinutes()
@@ -94,7 +59,7 @@ function getNowStatus(entries, periodSchedule) {
   if (current >= timeToMin(enabled[enabled.length - 1].end)) return { text: "수업 끝", emoji: "✅" }
 
   // 현재 교시 찾기
-  const slot = enabled.find((p) => current >= timeToMin(p.start) && current < timeToMin(p.end))
+  const slot = findCurrentPeriod(enabled, current)
 
   // 교시 사이 = 쉬는 시간, 다음 교시 과목 예고
   if (!slot) {

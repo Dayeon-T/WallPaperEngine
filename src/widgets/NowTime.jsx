@@ -2,60 +2,16 @@ import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchTimetable } from "../api/timetable"
 import { fetchProfileRow } from "../api/settings"
-
-const DEFAULT_PERIOD_SCHEDULE = [
-  null,
-  { label: "1교시", start: "08:20", end: "09:10", enabled: true },
-  { label: "2교시", start: "09:20", end: "10:10", enabled: true },
-  { label: "3교시", start: "10:20", end: "11:10", enabled: true },
-  { label: "4교시", start: "11:20", end: "12:10", enabled: true },
-  { label: "점심시간", start: "12:10", end: "13:00", enabled: true },
-  { label: "5교시", start: "13:00", end: "13:50", enabled: true },
-  { label: "6교시", start: "14:00", end: "14:50", enabled: true },
-  { label: "7교시", start: "15:00", end: "15:50", enabled: true },
-  { label: "방과후 A", start: "16:30", end: "17:20", enabled: false },
-  { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
-]
-
-// 설정(교시 시간 → 기본 퇴근 시각)에 값이 없을 때 쓰는 기본값
-const DEFAULT_END = "16:00"
-const AFTERSCHOOL_START = 9
-
-function getMondayStr() {
-  const d = new Date()
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const dd = String(d.getDate()).padStart(2, "0")
-  return `${y}${m}${dd}`
-}
-
-function buildBreakSlots(periods) {
-  const breaks = []
-  for (let i = 0; i < periods.length - 1; i++) {
-    const cur = periods[i]
-    const next = periods[i + 1]
-    if (!cur || !next) continue
-    if (cur.end !== next.start) {
-      const label = cur.label === "점심시간" || next.label === "점심시간" ? "점심시간" :
-        cur.index >= AFTERSCHOOL_START ? "석식시간" : "쉬는 시간"
-      breaks.push({ start: cur.end, end: next.start, label })
-    }
-  }
-  return breaks
-}
+import {
+  DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, AFTERSCHOOL_START,
+  timeToMin, mergePeriodSchedule, getEnabledPeriods,
+  findCurrentPeriod, buildBreakSlots, getWeeklyOverrides, resolveEntry,
+} from "../lib/periods"
 
 // === 테스트용: 원하는 시간/요일로 변경 후 확인 ===
 const DEBUG_TIME = null  // "HH:MM" 형식, null이면 실제 시간 사용
 const DEBUG_DAY = null        // 1=월 ~ 5=금, null이면 실제 요일 사용
 // ===============================================
-
-function timeToMin(str) {
-  const [h, m] = str.split(":").map(Number)
-  return h * 60 + m
-}
 
 function nowMin() {
   const d = new Date()
@@ -76,7 +32,7 @@ export default function NowTime() {
   const [homeroomClass, setHomeroomClass] = useState(null)
   const [tick, setTick] = useState(0)
   const [PERIOD_SCHEDULE, setPeriodSchedule] = useState(DEFAULT_PERIOD_SCHEDULE)
-  const [workEndTime, setWorkEndTime] = useState(DEFAULT_END)
+  const [workEndTime, setWorkEndTime] = useState(DEFAULT_WORK_END_TIME)
   const [weeklyOverrides, setWeeklyOverrides] = useState({})
   const [classOverrides, setClassOverrides] = useState({})
 
@@ -91,25 +47,11 @@ export default function NowTime() {
     if (classResult.data) setClassEntries(classResult.data)
     if (profileResult.data) {
       setHomeroomClass(profileResult.data.homeroom_class || null)
-      setWorkEndTime(profileResult.data.work_end_time || DEFAULT_END)
-      const wt = profileResult.data.weekly_timetable
-      if (wt && wt.week === getMondayStr()) {
-        setWeeklyOverrides(wt.map || {})
-        setClassOverrides(wt.classMap || {})
-      } else {
-        setWeeklyOverrides({})
-        setClassOverrides({})
-      }
-      const saved = profileResult.data.period_schedule
-      if (Array.isArray(saved) && saved.length > 0) {
-        const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
-          label: saved[i]?.label || def.label,
-          start: saved[i]?.start || def.start,
-          end: saved[i]?.end || def.end,
-          enabled: saved[i]?.enabled ?? def.enabled,
-        }))
-        setPeriodSchedule([null, ...merged])
-      }
+      setWorkEndTime(profileResult.data.work_end_time || DEFAULT_WORK_END_TIME)
+      const wt = getWeeklyOverrides(profileResult.data.weekly_timetable)
+      setWeeklyOverrides(wt.map)
+      setClassOverrides(wt.classMap)
+      setPeriodSchedule(mergePeriodSchedule(profileResult.data.period_schedule))
     }
   }, [user])
 
@@ -127,11 +69,7 @@ export default function NowTime() {
   }, [])
 
 
-  // 시간표 entry 의 start_period/end_period 는 "원래 교시 번호" 기준이므로
-  // 비활성 교시를 걸러내되 번호(index)는 그대로 유지한다.
-  const enabledPeriods = PERIOD_SCHEDULE
-    .map((p, i) => (p ? { ...p, index: i } : null))
-    .filter((p) => p && p.enabled !== false)
+  const enabledPeriods = getEnabledPeriods(PERIOD_SCHEDULE)
   const enabledIndexes = new Set(enabledPeriods.map((p) => p.index))
   const BREAK_SLOTS = buildBreakSlots(enabledPeriods)
 
@@ -142,35 +80,21 @@ export default function NowTime() {
   const current = DEBUG_TIME ? timeToMin(DEBUG_TIME) : nowMin()
   const isWeekend = dayIndex === 0
 
-  let activePeriod = null
-  let activePeriodLabel = ""
-  for (const s of enabledPeriods) {
-    if (current >= timeToMin(s.start) && current < timeToMin(s.end)) {
-      activePeriod = s.index
-      activePeriodLabel = s.label
-      break
-    }
-  }
+  const activeSlot = findCurrentPeriod(enabledPeriods, current)
+  const activePeriod = activeSlot?.index ?? null
+  const activePeriodLabel = activeSlot?.label ?? ""
 
-  let activeBreak = null
-  for (const b of BREAK_SLOTS) {
-    if (current >= timeToMin(b.start) && current < timeToMin(b.end)) {
-      activeBreak = b
-      break
-    }
-  }
+  const activeBreak = BREAK_SLOTS.find(
+    (b) => current >= timeToMin(b.start) && current < timeToMin(b.end)
+  ) ?? null
 
   const activeEntry = activePeriod
-    ? weeklyOverrides[`${dayIndex}-${activePeriod}`] !== undefined
-      ? weeklyOverrides[`${dayIndex}-${activePeriod}`]
-      : todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+    ? resolveEntry(todayEntries, weeklyOverrides, dayIndex, activePeriod)
     : null
 
   const todayClassEntries = classEntries.filter((e) => e.day === dayIndex)
   const activeClassEntry = activePeriod
-    ? classOverrides[`${dayIndex}-${activePeriod}`] !== undefined
-      ? classOverrides[`${dayIndex}-${activePeriod}`]
-      : todayClassEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+    ? resolveEntry(todayClassEntries, classOverrides, dayIndex, activePeriod)
     : null
 
   let classLineText = ""
@@ -191,7 +115,7 @@ export default function NowTime() {
     return ep >= AFTERSCHOOL_START && ep > max ? ep : max
   }, 0)
 
-  let endOfDayMin = timeToMin(workEndTime || DEFAULT_END)
+  let endOfDayMin = timeToMin(workEndTime || DEFAULT_WORK_END_TIME)
   if (latestAfterSchoolPeriod > 0 && PERIOD_SCHEDULE[latestAfterSchoolPeriod]) {
     endOfDayMin = timeToMin(PERIOD_SCHEDULE[latestAfterSchoolPeriod].end)
   }

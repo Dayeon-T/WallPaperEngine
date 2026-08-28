@@ -3,31 +3,13 @@ import { useAuth } from "../context/AuthContext"
 import { fetchTimetable, upsertTimetableEntry, deleteTimetableEntry } from "../api/timetable"
 import { fetchProfileRow, upsertProfileRow } from "../api/settings"
 import TimeBlock from "./Components/TimeBlock"
+import {
+  DEFAULT_PERIOD_SCHEDULE, getMondayStr, mergePeriodSchedule, getWeeklyOverrides,
+} from "../lib/periods"
 
 const DAY_LABELS = ["", "월", "화", "수", "목", "금"]
-const DEFAULT_PERIODS = [
-  { label: "1교시", start: "08:20", enabled: true },
-  { label: "2교시", start: "09:20", enabled: true },
-  { label: "3교시", start: "10:20", enabled: true },
-  { label: "4교시", start: "11:20", enabled: true },
-  { label: "점심시간", start: "12:10", enabled: true },
-  { label: "5교시", start: "13:00", enabled: true },
-  { label: "6교시", start: "14:00", enabled: true },
-  { label: "7교시", start: "15:00", enabled: true },
-  { label: "방과후 A", start: "16:30", enabled: false },
-  { label: "방과후 B", start: "18:20", enabled: false },
-]
-
-function getMondayStr() {
-  const d = new Date()
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const dd = String(d.getDate()).padStart(2, "0")
-  return `${y}${m}${dd}`
-}
+// 이 위젯의 periods 배열은 0부터 시작한다 (교시 번호 = index + 1)
+const DEFAULT_PERIODS = DEFAULT_PERIOD_SCHEDULE.slice(1).map((p) => ({ ...p }))
 
 export default function Timetable() {
   const { user } = useAuth()
@@ -55,24 +37,13 @@ export default function Timetable() {
     if (profileResult.data) {
       if (profileResult.data.today_highlight === false) setHighlightToday(false)
       setHomeroomClass(profileResult.data.homeroom_class || null)
-      const saved = profileResult.data.period_schedule
-      if (Array.isArray(saved) && saved.length > 0) {
-        setPeriods(DEFAULT_PERIODS.map((def, i) => ({
-          label: saved[i]?.label || def.label,
-          start: saved[i]?.start || def.start,
-          enabled: saved[i]?.enabled ?? def.enabled,
-        })))
-      }
-      const wt = profileResult.data.weekly_timetable
-      if (wt && wt.week === getMondayStr()) {
-        setWeeklyMaps({ map: wt.map || {}, classMap: wt.classMap || {} })
-      } else {
-        setWeeklyMaps({ map: {}, classMap: {} })
-        // 지난주 교환 기록은 더 이상 쓰이지 않는다. 남겨두면 언제 만들어진
-        // 값인지 알 수 없어 문제가 생겼을 때 추적이 어렵다.
-        if (wt) {
-          upsertProfileRow(user.id, { weekly_timetable: null })
-        }
+      setPeriods(mergePeriodSchedule(profileResult.data.period_schedule).slice(1))
+      const wt = getWeeklyOverrides(profileResult.data.weekly_timetable)
+      setWeeklyMaps({ map: wt.map, classMap: wt.classMap })
+      // 지난주 교환 기록은 더 이상 쓰이지 않는다. 남겨두면 언제 만들어진
+      // 값인지 알 수 없어 문제가 생겼을 때 추적이 어렵다.
+      if (wt.stale) {
+        upsertProfileRow(user.id, { weekly_timetable: null })
       }
     }
   }, [user, tab])

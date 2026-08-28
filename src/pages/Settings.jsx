@@ -14,21 +14,7 @@ import { fetchSchoolEvents, addSchoolEvent, deleteSchoolEvent } from "../api/sch
 import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
 
-const DEFAULT_PERIOD_SCHEDULE = [
-  null,
-  { label: "1교시", start: "08:20", end: "09:10", enabled: true },
-  { label: "2교시", start: "09:20", end: "10:10", enabled: true },
-  { label: "3교시", start: "10:20", end: "11:10", enabled: true },
-  { label: "4교시", start: "11:20", end: "12:10", enabled: true },
-  { label: "점심시간", start: "12:10", end: "13:00", enabled: true },
-  { label: "5교시", start: "13:00", end: "13:50", enabled: true },
-  { label: "6교시", start: "14:00", end: "14:50", enabled: true },
-  { label: "7교시", start: "15:00", end: "15:50", enabled: true },
-  { label: "방과후 A", start: "16:30", end: "17:20", enabled: false },
-  { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
-]
-
-const DEFAULT_WORK_END_TIME = "16:00"
+import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
 
 const DEFAULT_QUICK_LINKS = [
   { name: "나이스", url: "https://sen.neis.go.kr/" },
@@ -577,16 +563,7 @@ function PeriodSection({ user, showMsg }) {
     (async () => {
       const { data } = await fetchProfileRow(user.id)
       if (data?.period_schedule) {
-        const saved = data.period_schedule
-        if (Array.isArray(saved) && saved.length > 0) {
-          const merged = DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
-            label: saved[i]?.label || def.label,
-            start: saved[i]?.start || def.start,
-            end: saved[i]?.end || def.end,
-            enabled: saved[i]?.enabled ?? def.enabled,
-          }))
-          setSchedule(merged)
-        }
+        setSchedule(mergePeriodSchedule(data.period_schedule).slice(1))
       }
       if (data?.work_end_time) setWorkEndTime(data.work_end_time)
       setLoaded(true)
