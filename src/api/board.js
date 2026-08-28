@@ -17,6 +17,15 @@ export async function issueBoardCode() {
   return { data, error }
 }
 
+// notice에 null을 주면 공지를 내린다
+export async function updateBoardNotice(userId, notice) {
+  const { error } = await supabase
+    .from("classroom_boards")
+    .update({ notice, notice_at: notice ? new Date().toISOString() : null })
+    .eq("owner_id", userId)
+  return { error }
+}
+
 export async function deleteMyBoard(userId) {
   const { error } = await supabase
     .from("classroom_boards")
