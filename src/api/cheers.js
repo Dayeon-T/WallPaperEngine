@@ -78,13 +78,14 @@ export async function fetchConversationList(userId) {
   if (partnerIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, name, avatar_url")
+      .select("id, name, avatar_url, period_schedule")
       .in("id", partnerIds)
 
     for (const p of (profiles || [])) {
       if (map[p.id]) {
         if (!map[p.id].partnerName) map[p.id].partnerName = p.name
         map[p.id].partnerAvatar = p.avatar_url || null
+        map[p.id].partnerSchedule = p.period_schedule || null
       }
     }
   }
@@ -216,7 +217,7 @@ export async function fetchFriends(userId) {
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, name, avatar_url")
+    .select("id, name, avatar_url, period_schedule")
     .in("id", friendIds)
 
   return profiles || []

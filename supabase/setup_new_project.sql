@@ -132,9 +132,8 @@ alter table public.timetable alter column is_class set not null;
 
 alter table public.timetable enable row level security;
 
-drop policy if exists "본인 시간표 조회" on public.timetable;
-create policy "본인 시간표 조회"
-  on public.timetable for select using (auth.uid() = user_id);
+-- 시간표 조회(SELECT) 정책은 friends / cheers 테이블을 참조하므로
+-- 그 테이블들을 만든 뒤, 이 파일 아래쪽에서 정의합니다.
 
 drop policy if exists "본인 시간표 생성" on public.timetable;
 create policy "본인 시간표 생성"
@@ -276,6 +275,34 @@ create policy "본인·친구·대화상대만 프로필 조회"
       select 1 from public.cheers c
       where (c.from_id = auth.uid() and c.to_id = profiles.id)
          or (c.to_id = auth.uid() and c.from_id = profiles.id)
+    )
+  );
+
+
+-- ───────────── timetable 조회 정책 (friends / cheers 필요) ─────────────
+-- 친구 목록·쪽지함에 상대의 현재 수업 상태(수학 3교시, 공강 등)를 보여주기 위해
+-- 개인 시간표는 "본인 / 친구 / 쪽지를 주고받은 상대"까지 조회를 허용합니다.
+-- 학급 시간표(is_class = true)는 본인만 볼 수 있습니다.
+drop policy if exists "본인 시간표 조회" on public.timetable;
+drop policy if exists "본인·친구·대화상대 시간표 조회" on public.timetable;
+create policy "본인·친구·대화상대 시간표 조회"
+  on public.timetable for select
+  using (
+    auth.uid() = user_id
+    or (
+      is_class = false
+      and (
+        exists (
+          select 1 from public.friends f
+          where (f.user_id = auth.uid() and f.friend_id = timetable.user_id)
+             or (f.friend_id = auth.uid() and f.user_id = timetable.user_id)
+        )
+        or exists (
+          select 1 from public.cheers c
+          where (c.from_id = auth.uid() and c.to_id = timetable.user_id)
+             or (c.to_id = auth.uid() and c.from_id = timetable.user_id)
+        )
+      )
     )
   );
 

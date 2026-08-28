@@ -45,6 +45,8 @@ const DEFAULT_PERIOD_SCHEDULE = [
   { label: "5교시", start: "13:00", end: "13:50", enabled: true },
   { label: "6교시", start: "14:00", end: "14:50", enabled: true },
   { label: "7교시", start: "15:00", end: "15:50", enabled: true },
+  { label: "방과후 A", start: "16:30", end: "17:20", enabled: false },
+  { label: "방과후 B", start: "18:20", end: "20:00", enabled: false },
 ]
 
 function timeToMin(str) {
@@ -52,77 +54,71 @@ function timeToMin(str) {
   return h * 60 + m
 }
 
-function getNowStatus(entries) {
+// 그 사람이 설정(교시 시간)에서 바꾼 값을 기본 교시표 위에 덮어쓴다.
+function buildSchedule(saved) {
+  if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_PERIOD_SCHEDULE
+  return [
+    null,
+    ...DEFAULT_PERIOD_SCHEDULE.slice(1).map((def, i) => ({
+      label: saved[i]?.label || def.label,
+      start: saved[i]?.start || def.start,
+      end: saved[i]?.end || def.end,
+      enabled: saved[i]?.enabled ?? def.enabled,
+    })),
+  ]
+}
+
+function getNowStatus(entries, periodSchedule) {
   if (!entries || entries.length === 0) return null // 시간표 없으면 표시 안 함
 
   const now = new Date()
   const dayIndex = now.getDay()
   if (dayIndex === 0 || dayIndex === 6) return { text: "주말", emoji: "🏖️" }
 
-  const schedule = DEFAULT_PERIOD_SCHEDULE
-  const enabled = [null, ...schedule.slice(1).filter((p) => p?.enabled !== false)]
+  // 교시 번호(index)는 유지한 채 활성 교시만 남긴다.
+  // entry의 start_period/end_period가 원래 교시 번호 기준이기 때문이다.
+  const enabled = buildSchedule(periodSchedule)
+    .map((p, i) => (p ? { ...p, index: i } : null))
+    .filter((p) => p && p.enabled !== false)
+  if (enabled.length === 0) return null
+
   const current = now.getHours() * 60 + now.getMinutes()
   const todayEntries = entries.filter((e) => e.day === dayIndex)
 
   // 오늘 수업이 없으면
   if (todayEntries.length === 0) return { text: "오늘 수업 없음", emoji: "🎉" }
 
-  // 이 사람의 오늘 마지막 수업 기준으로 끝 시간 결정
-  const lastPeriod = Math.max(...todayEntries.map((e) => e.end_period ?? e.start_period))
-  const lastSlot = schedule[lastPeriod]
-  const dayEnd = lastSlot ? timeToMin(lastSlot.end) : timeToMin(enabled[enabled.length - 1].end)
-
-  // 이 사람의 오늘 첫 수업 기준으로 시작 시간 결정
-  const firstPeriod = Math.min(...todayEntries.map((e) => e.start_period))
-  const firstSlot = schedule[firstPeriod]
-  const dayStart = firstSlot ? timeToMin(firstSlot.start) : timeToMin(enabled[1].start)
-
-  if (current < dayStart) return { text: "수업 전", emoji: "🌅" }
-  if (current >= dayEnd) return { text: "수업 끝", emoji: "✅" }
+  // '수업 전/끝'은 그 사람의 첫/마지막 수업이 아니라 일과 전체 기준으로 판단한다.
+  // 첫 수업 기준으로 잡으면 3교시 시작인 날 1~2교시 공강이 전부 '수업 전'이 돼버린다.
+  if (current < timeToMin(enabled[0].start)) return { text: "수업 전", emoji: "🌅" }
+  if (current >= timeToMin(enabled[enabled.length - 1].end)) return { text: "수업 끝", emoji: "✅" }
 
   // 현재 교시 찾기
-  let activePeriod = null
-  for (let p = 1; p < enabled.length; p++) {
-    if (current >= timeToMin(enabled[p].start) && current < timeToMin(enabled[p].end)) {
-      activePeriod = p
-      break
-    }
-  }
+  const slot = enabled.find((p) => current >= timeToMin(p.start) && current < timeToMin(p.end))
 
-  // 쉬는 시간
-  if (!activePeriod) {
-    const lunch = enabled.find((p) => p?.label === "점심시간")
-    if (lunch && current >= timeToMin(lunch.start) && current < timeToMin(lunch.end)) {
-      return { text: "점심시간", emoji: "🍚" }
-    }
-    // 쉬는 시간일 때 다음 교시 정보 표시
-    let nextPeriodIdx = null
-    for (let p = 1; p < enabled.length; p++) {
-      if (enabled[p] && timeToMin(enabled[p].start) > current) {
-        nextPeriodIdx = p
-        break
-      }
-    }
-    if (nextPeriodIdx) {
-      const nextEntry = todayEntries.find((e) => nextPeriodIdx >= e.start_period && nextPeriodIdx <= e.end_period)
+  // 교시 사이 = 쉬는 시간, 다음 교시 과목 예고
+  if (!slot) {
+    const next = enabled.find((p) => timeToMin(p.start) > current)
+    if (next) {
+      const nextEntry = todayEntries.find((e) => next.index >= e.start_period && next.index <= e.end_period)
       if (nextEntry && nextEntry.subject) {
-        return { text: `쉬는 시간 → ${nextEntry.subject} ${enabled[nextPeriodIdx].label}`, emoji: "☕" }
+        return { text: `쉬는 시간 → ${nextEntry.subject} ${next.label}`, emoji: "☕" }
       }
     }
     return { text: "쉬는 시간", emoji: "☕" }
   }
 
   // 점심시간
-  if (enabled[activePeriod].label === "점심시간") {
+  if (slot.label === "점심시간") {
     return { text: "점심시간", emoji: "🍚" }
   }
 
   // 수업 중인지 공강인지 - 과목명 + 교시 표시
-  const entry = todayEntries.find((e) => activePeriod >= e.start_period && activePeriod <= e.end_period)
+  const entry = todayEntries.find((e) => slot.index >= e.start_period && slot.index <= e.end_period)
   if (entry && entry.subject) {
-    return { text: `${entry.subject} ${enabled[activePeriod].label}`, emoji: "📚" }
+    return { text: `${entry.subject} ${slot.label}`, emoji: "📚" }
   }
-  return { text: `${enabled[activePeriod].label} 공강`, emoji: "✨" }
+  return { text: `${slot.label} 공강`, emoji: "✨" }
 }
 
 export default function Messages() {
@@ -179,7 +175,7 @@ export default function Messages() {
       try {
         const { data: tt } = await fetchTimetableByUserId(f.id)
         if (tt) {
-          const s = getNowStatus(tt)
+          const s = getNowStatus(tt, f.period_schedule)
           if (s) newStatusMap[f.id] = s
         }
       } catch { /* 권한 없으면 무시 */ }
@@ -221,7 +217,7 @@ export default function Messages() {
       try {
         const { data: tt } = await fetchTimetableByUserId(c.partnerId)
         if (tt) {
-          const s = getNowStatus(tt)
+          const s = getNowStatus(tt, c.partnerSchedule)
           if (s) newStatusMap[c.partnerId] = s
         }
       } catch { /* 권한 없으면 무시 */ }
@@ -306,14 +302,15 @@ export default function Messages() {
     }
     setSelectedStatus(statusMap[partnerId] || null)
     setShowNewChat(false)
-    // 상대 시간표 상태 로드
-    fetchTimetableByUserId(partnerId).then(({ data: tt }) => {
-      if (tt) {
-        const s = getNowStatus(tt)
-        setSelectedStatus(s)
-        setStatusMap((prev) => ({ ...prev, [partnerId]: s }))
-      }
-    }).catch(() => {})
+    // 상대 시간표 상태 로드 (그 사람의 교시 시간 설정까지 반영)
+    Promise.all([fetchTimetableByUserId(partnerId), fetchProfileRow(partnerId)])
+      .then(([{ data: tt }, { data: prof }]) => {
+        if (tt) {
+          const s = getNowStatus(tt, prof?.period_schedule)
+          setSelectedStatus(s)
+          setStatusMap((prev) => ({ ...prev, [partnerId]: s }))
+        }
+      }).catch(() => {})
     const { data } = await fetchConversation(user.id, partnerId)
     setMessages(data || [])
     // 안읽은 메시지 읽음 처리
