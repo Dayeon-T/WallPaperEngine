@@ -55,6 +55,15 @@ export async function toggleImportant(id, isImportant) {
   return { error }
 }
 
+export async function updateTodoDueDate(id, dueDate) {
+  const { error } = await supabase
+    .from("todos")
+    .update({ due_date: dueDate })
+    .eq("id", id)
+
+  return { error }
+}
+
 export async function updateTodoContent(id, content) {
   const { error } = await supabase
     .from("todos")

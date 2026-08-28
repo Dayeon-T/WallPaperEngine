@@ -33,7 +33,8 @@ function getCalendarDays(year, month) {
   })
 }
 
-export default function DateDropdown({ value, onChange, size = "default", defaultYear }) {
+// triggerContent/triggerClassName을 주면 기본 버튼 대신 그 모양(배지·아이콘)으로 달력을 연다.
+export default function DateDropdown({ value, onChange, size = "default", defaultYear, triggerContent, triggerClassName }) {
   const buttonRef = useRef(null)
   const pickerRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -209,11 +210,14 @@ export default function DateDropdown({ value, onChange, size = "default", defaul
         ref={buttonRef}
         type="button"
         onClick={openPicker}
-        className={`${h} min-w-[6.5rem] rounded-lg border border-gray-200 bg-white px-2.5 ${textSize} text-gray-700 outline-none transition-colors hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary`}
+        className={
+          triggerClassName ??
+          `${h} min-w-[6.5rem] rounded-lg border border-gray-200 bg-white px-2.5 ${textSize} text-gray-700 outline-none transition-colors hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary`
+        }
       >
-        {value || "날짜 선택"}
+        {triggerContent ?? (value || "날짜 선택")}
       </button>
-      {value && (
+      {value && !triggerContent && (
         <button
           type="button"
           onClick={() => onChange("")}
