@@ -163,7 +163,7 @@ create table public.classroom_boards (
 
 1. **0단계 — 리팩터링** ✅ 완료 (2026-08-28): 교시 판정·시간표 병합 로직을 `src/lib/periods.js`로 추출. NowTime·Messages·Timetable·Settings가 공유.
 2. **1단계 — 페어링** ✅ 코드 완료 (2026-08-28): `supabase/classroom_board.sql`(테이블·RLS·`issue_board_code`·`get_board_view`) + 설정 → 교실 화면 섹션(담임만 노출) + `/board` 코드 입력·자동 복귀 화면. **SQL은 Supabase SQL Editor에서 직접 실행 필요.** 담임 해제 시 `get_board_view`가 null을 반환해 칠판이 연결 화면으로 돌아간다(열어둔 결정 → 안전한 쪽으로 확정).
-3. **2단계 — 기본 화면**: 칠판 레이아웃 + RPC + 시간표/급식/일정 표시 (2~3일)
+3. **2단계 — 기본 화면** ✅ 코드 완료 (2026-08-28): `supabase/classroom_board_v2.sql`로 `get_board_view` 확장(학급 시간표+이번주 classMap·교시 시간·학사일정·D-Day·학교 코드 — 개인 데이터는 반환 안 함, **SQL 수동 실행 필요**). 칠판 레이아웃: 상단 학급명·날짜·시계·현재 교시 / 좌측 오늘 시간표(현재 교시 하이라이트) / 우측 급식(NEIS 직접 조회, 알레르기 표기 제거)·이번 주 일정(NEIS+직접 추가 병합)·D-Day / 하단 공지 바. 3단계 전까지는 1분 폴링으로 갱신.
 4. **3단계 — 실시간**: broadcast 채널 연결, 교사 측 변경 시 신호 발송 (1일)
 5. **4단계 — 공지 보내기**: 대시보드에 "교실로 보내기" 패널 + 칠판 공지 표시 (1일)
 6. QA: 전자칠판 실기기(브라우저 종류·해상도) 확인 후 배포
