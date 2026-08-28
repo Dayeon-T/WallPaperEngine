@@ -89,6 +89,8 @@ const CHANGELOGS = [
       "마감일이 없는 할 일도 옆의 달력 아이콘을 눌러 마감일을 넣을 수 있어요.",
       "퀵링크가 크롬 팝업 대신 컴퓨터에 설정된 기본 브라우저로 열려요.",
       "화면 아래쪽에서 달력을 열면 밑이 잘리던 문제를 고쳤어요. 공간에 맞춰 위로 열려요.",
+      "친구 목록과 쪽지함에 친구의 현재 수업 상태가 표시되지 않던 문제를 고쳤어요.",
+      "친구의 수업 상태를 계산할 때 그 선생님이 설정한 교시 시간을 반영해요.",
     ],
   },
   {
@@ -2117,10 +2119,12 @@ function ChangelogSection() {
             <div className={`absolute -left-[7px] top-0.5 w-3 h-3 rounded-full ${
               page === 0 && i === 0 ? "bg-primary ring-4 ring-primary/20" : "bg-primary"
             }`} />
-            {page === 0 && i === 0 && (
-              <span className="absolute -left-[3px] top-5 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">NEW</span>
-            )}
-            <p className="text-sm font-bold mb-2">{log.date}</p>
+            <p className="text-sm font-bold mb-2 flex items-center gap-1.5">
+              {log.date}
+              {page === 0 && i === 0 && (
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">NEW</span>
+              )}
+            </p>
             <ul className="flex flex-col gap-1.5">
               {log.changes.map((change, j) => (
                 <li key={j} className="text-sm text-gray-600 flex items-start gap-2">
