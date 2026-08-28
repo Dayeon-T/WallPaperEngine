@@ -767,6 +767,14 @@ function ClassroomSection({ user, showMsg }) {
               <p>2. 위 코드를 입력하면 연결 완료 — 재부팅해도 유지돼요</p>
             </div>
             <div className="flex gap-3">
+              <a
+                href={`/board?code=${board.board_code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                미리보기
+              </a>
               <button
                 className="rounded-lg border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
                 disabled={working}
@@ -783,6 +791,7 @@ function ClassroomSection({ user, showMsg }) {
               </button>
             </div>
             <p className="text-xs text-gray-400">
+              미리보기는 이 브라우저에서 세션을 유지한 채 칠판 화면을 새 탭으로 보여줘요.
               코드가 외부에 알려진 것 같으면 재발급하세요. 이전 코드는 즉시 무효가 됩니다.
             </p>
           </>

@@ -31,24 +31,22 @@ function getWeekRange(now) {
 }
 
 export default function Board() {
-  // loading | input | connected — 저장된 코드가 있으면 자동 복귀를 시도한다
-  const [phase, setPhase] = useState(() => (localStorage.getItem(CODE_KEY) ? "loading" : "input"))
+  // loading | input | connected — 저장된 코드 또는 ?code=가 있으면 자동 연결을 시도한다
+  const [phase, setPhase] = useState(() =>
+    localStorage.getItem(CODE_KEY) || new URLSearchParams(window.location.search).get("code")
+      ? "loading"
+      : "input"
+  )
   const [view, setView] = useState(null)
+  // 미리보기 모드: 교사 본인 브라우저에서 확인하는 용도. 세션을 지우지도, 코드를 저장하지도 않는다.
+  const [preview, setPreview] = useState(false)
+  const [activeCode, setActiveCode] = useState(null)
   const [codeInput, setCodeInput] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
   const [connecting, setConnecting] = useState(false)
   const [now, setNow] = useState(new Date())
 
-  // 칠판은 공용 기기다. 이 브라우저에 교사 세션이 남아 있으면
-  // (실수로 로그인했던 경우 포함) 칠판 화면에 들어오는 순간 지운다.
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession()
-      if (data?.session) await supabase.auth.signOut()
-    })()
-  }, [])
-
-  const connect = useCallback(async (code, { silent = false } = {}) => {
+  const connect = useCallback(async (code, { silent = false, persist = true } = {}) => {
     const normalized = (code || "").trim().toUpperCase()
     if (normalized.length !== 6) {
       if (!silent) setErrorMsg("6자리 코드를 입력해주세요.")
@@ -68,31 +66,57 @@ export default function Board() {
       localStorage.removeItem(CODE_KEY)
       if (!silent) setErrorMsg("코드를 찾을 수 없습니다. 다시 확인해주세요.")
       setView(null)
+      setActiveCode(null)
       setPhase("input")
       return false
     }
-    localStorage.setItem(CODE_KEY, normalized)
+    if (persist) localStorage.setItem(CODE_KEY, normalized)
+    setActiveCode(normalized)
     setView(data)
     setErrorMsg("")
     setPhase("connected")
     return true
   }, [])
 
-  // 저장된 코드가 있으면 자동 복귀
+  // 기기 상태에 따라 시작 방식이 다르다.
+  // 1) 로그인된 브라우저 + ?code= (설정의 미리보기 버튼): 미리보기 — 세션 유지, 저장 안 함
+  // 2) 페어링된 칠판 기기(코드 저장됨): 공용 기기이므로 남은 로그인 세션을 지우고 자동 복귀
+  // 3) 로그인된 브라우저에서 그냥 열었을 때: 미리보기 모드로 코드 입력 대기
+  // 4) 그 외(실기기 최초 연결): 코드 입력 후 저장
   useEffect(() => {
-    const saved = localStorage.getItem(CODE_KEY)
-    if (saved) connect(saved, { silent: true })
+    (async () => {
+      const urlCode = new URLSearchParams(window.location.search).get("code")
+      const savedCode = localStorage.getItem(CODE_KEY)
+      const { data } = await supabase.auth.getSession()
+      const hasSession = !!data?.session
+
+      if (hasSession && urlCode) {
+        setPreview(true)
+        connect(urlCode, { silent: true, persist: false })
+        return
+      }
+      if (savedCode) {
+        if (hasSession) await supabase.auth.signOut()
+        connect(savedCode, { silent: true })
+        return
+      }
+      if (hasSession) setPreview(true)
+      if (urlCode) {
+        connect(urlCode, { silent: true, persist: !hasSession })
+      } else {
+        setPhase("input")
+      }
+    })()
   }, [connect])
 
   // 연결 중에는 주기적으로 다시 읽어 시간표·공지 변경을 반영한다
   useEffect(() => {
-    if (phase !== "connected") return
+    if (phase !== "connected" || !activeCode) return
     const timer = setInterval(() => {
-      const saved = localStorage.getItem(CODE_KEY)
-      if (saved) connect(saved, { silent: true })
+      connect(activeCode, { silent: true, persist: false })
     }, REFRESH_MS)
     return () => clearInterval(timer)
-  }, [phase, connect])
+  }, [phase, activeCode, connect])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000)
@@ -101,12 +125,13 @@ export default function Board() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!connecting) connect(codeInput)
+    if (!connecting) connect(codeInput, { persist: !preview })
   }
 
   const disconnect = () => {
     localStorage.removeItem(CODE_KEY)
     setView(null)
+    setActiveCode(null)
     setCodeInput("")
     setPhase("input")
   }
@@ -148,17 +173,22 @@ export default function Board() {
           <p className="mt-10 text-lg text-gray-500">
             코드는 담임 선생님의 대시보드 → 설정 → 교실 화면에서 만들 수 있어요.
           </p>
+          {preview && (
+            <p className="mt-4 text-base text-gray-600">
+              👀 로그인된 브라우저라 미리보기 모드로 열려요 — 대시보드 세션은 유지됩니다.
+            </p>
+          )}
         </div>
       </div>
     )
   }
 
-  return <BoardScreen view={view} now={now} onDisconnect={disconnect} />
+  return <BoardScreen view={view} now={now} preview={preview} onDisconnect={disconnect} />
 }
 
 /* ───────── 연결된 칠판 화면 ───────── */
 
-function BoardScreen({ view, now, onDisconnect }) {
+function BoardScreen({ view, now, preview, onDisconnect }) {
   const day = now.getDay()
   const isSchoolDay = day >= 1 && day <= 5
   const currentMin = now.getHours() * 60 + now.getMinutes()
@@ -232,6 +262,11 @@ function BoardScreen({ view, now, onDisconnect }) {
         </div>
       </div>
 
+      {preview && (
+        <p className="absolute bottom-1 left-2 text-xs text-gray-500">
+          👀 미리보기 — 세션이 유지되고, 이 기기에 연결이 저장되지 않아요
+        </p>
+      )}
       <button
         onClick={onDisconnect}
         className="absolute bottom-1 right-2 text-gray-700 text-xs hover:text-gray-500 transition-colors"
