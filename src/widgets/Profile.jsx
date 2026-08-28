@@ -41,13 +41,7 @@ export default function Profile() {
       {item.type === "settings" ? (
         <a href="/settings"><span>설정</span></a>
       ) : (
-        <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault()
-            window.open(item.url, "_blank", "width=1200,height=800")
-          }}
-        >
+        <a href={item.url} target="_blank" rel="noopener noreferrer">
           <span>{item.name}</span>
         </a>
       )}
