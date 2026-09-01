@@ -1,8 +1,7 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { Routes, Route, useLocation } from 'react-router'
 import { useAuth } from "./context/AuthContext"
 import { fetchProfileRow } from "./api/settings"
-import { notifyBoardRefresh } from "./api/board"
 import GridLayout from "./layouts/GridLayout"
 import SignIn from "./pages/SignIn"
 import SignUp from "./pages/SignUp"
@@ -14,9 +13,6 @@ import Messages from "./pages/Messages"
 import Privacy from "./pages/Privacy"
 import Terms from "./pages/Terms"
 import ConsentGate from "./legal/ConsentGate"
-
-// 교실 전자칠판 화면. 대시보드와 번들을 분리한다.
-const Board = lazy(() => import("./pages/Board"))
 
 function bgPrefsToStyle(prefs) {
   if (!prefs) return {}
@@ -96,24 +92,6 @@ function App() {
     })()
   }, [user])
 
-  // 칠판에 표시되는 데이터가 바뀌면 board 채널로 갱신 신호를 보낸다.
-  // 각 위젯·설정이 이미 쏘는 window 이벤트에 편승하므로 변경 지점을 일일이 알 필요가 없다.
-  useEffect(() => {
-    if (!user) return
-    const events = ["timetable-change", "school-events-change", "dday-change", "homeroom-change", "board-change"]
-    let timer = null
-    const handler = () => {
-      // 연속 수정(시간표 여러 칸 등)을 1초에 한 번으로 묶는다
-      clearTimeout(timer)
-      timer = setTimeout(() => notifyBoardRefresh(user.id), 1000)
-    }
-    events.forEach((e) => window.addEventListener(e, handler))
-    return () => {
-      clearTimeout(timer)
-      events.forEach((e) => window.removeEventListener(e, handler))
-    }
-  }, [user])
-
   useEffect(() => {
     const bgHandler = (e) => setBgStyle(bgPrefsToStyle(e.detail))
     const wsHandler = (e) => applyWidgetStyle(e.detail)
@@ -124,16 +102,6 @@ function App() {
       window.removeEventListener("widget-style-change", wsHandler)
     }
   }, [])
-
-  // 칠판은 교사 대시보드의 배경·여백·동의 화면과 무관한 전체 화면이다.
-  // 대시보드로 통하는 요소가 함께 렌더되지 않도록 셸 바깥에서 그린다.
-  if (pathname === "/board") {
-    return (
-      <Suspense fallback={null}>
-        <Board />
-      </Suspense>
-    )
-  }
 
   const hasCustomBg = bgStyle.backgroundColor || bgStyle.backgroundImage
 

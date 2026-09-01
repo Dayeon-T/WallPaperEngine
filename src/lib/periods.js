@@ -1,5 +1,5 @@
 // 교시 기준표와 교시 판정 로직의 단일 출처.
-// NowTime · Messages · Timetable · Settings · (예정) 교실 칠판(/board)이 같은 규칙을 공유한다.
+// NowTime · Messages · Timetable · Settings가 같은 규칙을 공유한다.
 
 // 인덱스 = 교시 번호가 되도록 0번 자리를 null로 비워둔다.
 // 시간표 entry의 start_period/end_period가 이 번호 기준이다.

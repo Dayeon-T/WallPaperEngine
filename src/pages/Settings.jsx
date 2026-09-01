@@ -15,7 +15,6 @@ import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
 
 import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
-import { fetchMyBoard, issueBoardCode, deleteMyBoard, signalBoardCode } from "../api/board"
 
 
 const BG_PRESETS = [
@@ -39,8 +38,6 @@ const SECTION_GROUPS = [
     category: "학교 · 일정",
     items: [
       { id: "period", label: "교시 시간" },
-      // 담임(homeroom_class 입력자)에게만 보인다 — 학급 시간표 탭과 같은 규칙
-      { id: "classroom", label: "교실 화면", homeroomOnly: true },
       { id: "school-events", label: "학사일정 관리" },
       { id: "dday", label: "D-Day 관리" },
       { id: "weekly-report", label: "주간 리포트" },
@@ -190,27 +187,11 @@ export default function Settings() {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState("profile")
   const [msg, setMsg] = useState({ text: "", type: "" })
-  // 교실 화면 메뉴는 담임에게만 보인다
-  const [homeroomClass, setHomeroomClass] = useState(null)
   const showMsg = (text, type = "success") => {
     setMsg({ text, type })
     setTimeout(() => setMsg({ text: "", type: "" }), 3000)
   }
 
-  useEffect(() => {
-    if (!user) return
-    ;(async () => {
-      const { data } = await fetchProfileRow(user.id)
-      setHomeroomClass(data?.homeroom_class || null)
-    })()
-  }, [user])
-
-  // 프로필 섹션에서 담임 학급을 바꾸면 메뉴에 바로 반영한다
-  useEffect(() => {
-    const handler = (e) => setHomeroomClass(e.detail || null)
-    window.addEventListener("homeroom-change", handler)
-    return () => window.removeEventListener("homeroom-change", handler)
-  }, [])
 
   if (!user) return null
 
@@ -239,7 +220,7 @@ export default function Settings() {
             <p className="px-2 pb-1.5 text-sm font-bold text-gray-800">
               {group.category}
             </p>
-            {group.items.filter((s) => !s.homeroomOnly || homeroomClass).map((s) => (
+            {group.items.map((s) => (
               <button
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
@@ -297,9 +278,6 @@ export default function Settings() {
         )}
         {activeSection === "period" && (
           <PeriodSection user={user} showMsg={showMsg} />
-        )}
-        {activeSection === "classroom" && homeroomClass && (
-          <ClassroomSection user={user} showMsg={showMsg} />
         )}
         {activeSection === "school-events" && (
           <SchoolEventsSection user={user} showMsg={showMsg} />
@@ -415,8 +393,6 @@ function ProfileSection({ user, showMsg }) {
         school_code: schoolCode,
         homeroom_class: homeroomClass.trim() || null,
       })
-      // 설정 메뉴(교실 화면)가 담임 여부 변화를 바로 반영하도록 알린다
-      window.dispatchEvent(new CustomEvent("homeroom-change", { detail: homeroomClass.trim() || null }))
     }
     setSaving(false)
     showMsg(error ? error.message : "프로필이 저장되었습니다.", error ? "error" : "success")
@@ -686,117 +662,6 @@ function PeriodSection({ user, showMsg }) {
             기본값으로 초기화
           </button>
         </div>
-      </div>
-    </div>
-  )
-}
-
-/* ───────── 섹션: 교실 화면 (담임 전용) ───────── */
-function ClassroomSection({ user, showMsg }) {
-  const [board, setBoard] = useState(null)
-  const [loaded, setLoaded] = useState(false)
-  const [working, setWorking] = useState(false)
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await fetchMyBoard(user.id)
-      setBoard(data || null)
-      setLoaded(true)
-    })()
-  }, [user.id])
-
-  const handleIssue = async (regenerate) => {
-    if (regenerate && !window.confirm(
-      "코드를 재발급하면 이전 코드는 즉시 무효가 됩니다.\n전자칠판에 새 코드를 다시 입력해야 해요. 계속할까요?"
-    )) return
-    setWorking(true)
-    const oldCode = board?.board_code
-    const { data, error } = await issueBoardCode()
-    setWorking(false)
-    if (error) { showMsg(error.message, "error"); return }
-    setBoard((prev) => ({ ...(prev || {}), board_code: data }))
-    // 이전 코드로 연결된 칠판이 즉시 연결 화면으로 돌아가도록 알린다
-    if (oldCode && oldCode !== data) signalBoardCode(oldCode)
-    showMsg(regenerate ? "코드가 재발급되었습니다." : "교실 코드가 만들어졌습니다.")
-  }
-
-  const handleDelete = async () => {
-    if (!window.confirm("교실 화면 연결을 끊을까요?\n전자칠판에는 더 이상 학급 정보가 표시되지 않습니다.")) return
-    setWorking(true)
-    const oldCode = board?.board_code
-    const { error } = await deleteMyBoard(user.id)
-    setWorking(false)
-    if (error) { showMsg(error.message, "error"); return }
-    setBoard(null)
-    // 칠판이 즉시 연결 화면으로 돌아가도록 알린다
-    if (oldCode) signalBoardCode(oldCode)
-    showMsg("교실 화면 연결이 해제되었습니다.")
-  }
-
-  const boardUrl = `${window.location.origin}/board`
-
-  if (!loaded) return <p className="text-sm text-gray-400">불러오는 중...</p>
-
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-2">교실 화면</h2>
-      <p className="text-sm text-gray-400 mb-6">
-        학급 시간표·급식·일정을 교실 전자칠판에 실시간으로 띄워주는 학생용 화면입니다.
-      </p>
-      <div className="max-w-md flex flex-col gap-6">
-        {!board ? (
-          <>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              교실 코드를 만들고 전자칠판 브라우저에서 입력하면 연결됩니다.
-              칠판은 보기 전용이라 학급 정보 외에는 아무것도 표시하지 않아요.
-            </p>
-            <button className={btnPrimary} disabled={working} onClick={() => handleIssue(false)}>
-              {working ? "만드는 중..." : "교실 코드 만들기"}
-            </button>
-          </>
-        ) : (
-          <>
-            <div>
-              <label className="text-xs text-gray-500 mb-2 block">내 교실 코드</label>
-              <p className="rounded-xl bg-gray-50 border border-gray-200 py-5 text-center text-4xl font-extrabold tracking-[0.3em] select-all">
-                {board.board_code}
-              </p>
-            </div>
-            <div className="rounded-xl bg-primary/5 p-4 text-sm text-gray-600 leading-relaxed">
-              <p className="font-semibold text-gray-800 mb-1.5">연결 방법 (학기 초 1회)</p>
-              <p>1. 전자칠판 브라우저에서 <span className="font-semibold text-primary select-all">{boardUrl}</span> 접속</p>
-              <p>2. 위 코드를 입력하면 연결 완료 — 재부팅해도 유지돼요</p>
-            </div>
-            <div className="flex gap-3">
-              <a
-                href={`/board?code=${board.board_code}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                미리보기
-              </a>
-              <button
-                className="rounded-lg border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-                disabled={working}
-                onClick={() => handleIssue(true)}
-              >
-                코드 재발급
-              </button>
-              <button
-                className="rounded-lg border border-red-200 px-6 py-2.5 text-sm font-semibold text-red-500 transition hover:bg-red-50 disabled:opacity-50"
-                disabled={working}
-                onClick={handleDelete}
-              >
-                연결 끊기
-              </button>
-            </div>
-            <p className="text-xs text-gray-400">
-              미리보기는 이 브라우저에서 세션을 유지한 채 칠판 화면을 새 탭으로 보여줘요.
-              코드가 외부에 알려진 것 같으면 재발급하세요. 이전 코드는 즉시 무효가 됩니다.
-            </p>
-          </>
-        )}
       </div>
     </div>
   )

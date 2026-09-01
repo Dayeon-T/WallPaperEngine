@@ -2,15 +2,11 @@ import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchInbox } from "../api/cheers"
 import { fetchProfileRow } from "../api/settings"
-import BoardSendPanel from "./Components/BoardSendPanel"
 
 export default function CheerButton() {
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
   const [avatarUrl, setAvatarUrl] = useState(null)
-  // 담임이면 빈 왼쪽 공간에 "교실 화면" 버튼이 생긴다 (비담임은 기존 그대로)
-  const [homeroomClass, setHomeroomClass] = useState(null)
-  const [panelOpen, setPanelOpen] = useState(false)
 
   const loadUnread = useCallback(async () => {
     if (!user) return
@@ -22,7 +18,6 @@ export default function CheerButton() {
     if (!user) return
     const { data } = await fetchProfileRow(user.id)
     if (data?.avatar_url) setAvatarUrl(data.avatar_url)
-    setHomeroomClass(data?.homeroom_class || null)
   }, [user])
 
   useEffect(() => { loadUnread() }, [loadUnread])
@@ -59,11 +54,7 @@ export default function CheerButton() {
   useEffect(() => {
     const handler = () => loadAvatar()
     window.addEventListener("avatar-change", handler)
-    window.addEventListener("homeroom-change", handler)
-    return () => {
-      window.removeEventListener("avatar-change", handler)
-      window.removeEventListener("homeroom-change", handler)
-    }
+    return () => window.removeEventListener("avatar-change", handler)
   }, [loadAvatar])
 
   if (!user) return null
@@ -73,21 +64,8 @@ export default function CheerButton() {
   }
 
   return (
-    <div className={`flex items-center h-full pr-3 gap-4 ${homeroomClass ? "justify-between" : "justify-end"}`}>
-      {homeroomClass && (
-        <button
-          onClick={() => setPanelOpen(true)}
-          className="flex-1 min-w-0 h-[clamp(96px,10vw,150px)] rounded-3xl bg-widjet shadow-sm hover:shadow-md transition-shadow flex items-center justify-center gap-3 px-4"
-          aria-label="교실로 보내기"
-        >
-          <span className="text-[clamp(1.8rem,2.4vw,2.8rem)]">🖥️</span>
-          <span className="min-w-0 truncate text-[clamp(0.9rem,1.1vw,1.3rem)] font-bold">
-            교실 화면
-          </span>
-        </button>
-      )}
-      {panelOpen && <BoardSendPanel user={user} onClose={() => setPanelOpen(false)} />}
-      <div className="relative shrink-0">
+    <div className="flex justify-end items-center h-full pr-3">
+      <div className="relative">
         <button
           onClick={handleNavigate}
           className="relative w-[clamp(96px,10vw,150px)] h-[clamp(96px,10vw,150px)] rounded-full overflow-hidden bg-primary/10 hover:bg-primary/20 transition-colors flex items-center justify-center shadow-sm"
