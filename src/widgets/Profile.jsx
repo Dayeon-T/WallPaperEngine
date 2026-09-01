@@ -2,22 +2,20 @@ import { useState, useEffect } from "react"
 import { useAuth } from "../context/AuthContext"
 import { signOut } from "../api/SignIn"
 import { fetchProfileRow } from "../api/settings"
-
-const DEFAULT_LINKS = [
-  { name: "나이스", url: "https://sen.neis.go.kr/" },
-  { name: "에듀파인", url: "https://klef.sen.go.kr/" },
-  { name: "클래스룸", url: "https://classroom.google.com/" },
-]
+import { getDefaultQuickLinks } from "../api/neis"
 
 export default function Profile() {
   const { user } = useAuth()
-  const [links, setLinks] = useState(DEFAULT_LINKS)
+  // 직접 저장한 퀵링크가 없으면 소속 교육청에 맞는 나이스·에듀파인 주소를 보여준다
+  const [links, setLinks] = useState(() => getDefaultQuickLinks(user?.user_metadata?.atpt_code))
   useEffect(() => {
     if (!user) return
     ;(async () => {
       const { data } = await fetchProfileRow(user.id)
       if (data?.quick_links && Array.isArray(data.quick_links) && data.quick_links.length > 0) {
         setLinks(data.quick_links)
+      } else {
+        setLinks(getDefaultQuickLinks(user.user_metadata?.atpt_code))
       }
     })()
   }, [user])

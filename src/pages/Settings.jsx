@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router"
 import { useAuth } from "../context/AuthContext"
-import { EDUCATION_OFFICES, searchSchools } from "../api/neis"
+import { EDUCATION_OFFICES, searchSchools, getDefaultQuickLinks } from "../api/neis"
 import {
   updateProfile,
   updatePassword,
@@ -17,11 +17,6 @@ import DateDropdown from "../widgets/Components/DateDropdown"
 import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
 import { fetchMyBoard, issueBoardCode, deleteMyBoard, signalBoardCode } from "../api/board"
 
-const DEFAULT_QUICK_LINKS = [
-  { name: "나이스", url: "https://sen.neis.go.kr/" },
-  { name: "에듀파인", url: "https://klef.sen.go.kr/" },
-  { name: "클래스룸", url: "https://classroom.google.com/" },
-]
 
 const BG_PRESETS = [
   "#F5F5F5", "#E8EAF6", "#E3F2FD", "#E0F2F1",
@@ -1082,7 +1077,8 @@ function FolderNamesSection({ user, showMsg }) {
 
 /* ───────── 섹션 4: 퀵링크 편집 ───────── */
 function QuickLinksSection({ user, showMsg }) {
-  const [links, setLinks] = useState(() => DEFAULT_QUICK_LINKS.map((l) => ({ ...l })))
+  // 저장된 퀵링크가 없으면 소속 교육청에 맞는 나이스·에듀파인 주소가 기본값
+  const [links, setLinks] = useState(() => getDefaultQuickLinks(user?.user_metadata?.atpt_code))
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
