@@ -162,6 +162,34 @@ export default function Timetable() {
     setSelectedCell(null)
   }
 
+  // 이번주 편집에서 더블클릭으로 한 칸을 직접 고친다. 기본 시간표는 건드리지 않고
+  // 이번주 교환 기록에만 쓰므로 월요일이 되면 원래대로 돌아온다.
+  const handleWeeklySave = async (day, period, updates) => {
+    const cellKey = `${day}-${period}`
+    try {
+      const newMap = { ...weeklyOverrides }
+      if (!updates.subject) {
+        if (baseCellMap[cellKey]) {
+          newMap[cellKey] = null    // 기본 시간표가 있는 칸: 이번주만 비운다
+        } else {
+          delete newMap[cellKey]    // 원래도 빈 칸: 이번주 기록 자체를 지운다
+        }
+      } else {
+        newMap[cellKey] = {
+          subject: updates.subject,
+          room: updates.room || "",
+          color: updates.color || "#EBEBEB",
+          day,
+          start_period: period,
+          end_period: period,
+        }
+      }
+      await saveWeeklyOverrides(newMap)
+    } finally {
+      setEditingCell(null)
+    }
+  }
+
   // 직접 고친 칸은 '이번주 교환' 기록보다 우선한다.
   // 교환으로 비운 칸(null 오버라이드)이 남아 있으면 새로 입력한 과목이 저장은 되고도
   // 화면에는 계속 빈 칸으로 보인다.
@@ -298,12 +326,19 @@ export default function Timetable() {
           isEditing={isEditing}
           isSelected={isSelected}
           swapMode={swapMode}
-          onDoubleClick={swapMode ? undefined : () => setEditingCell(cellKey)}
+          onDoubleClick={
+            swapMode
+              ? () => { setSelectedCell(null); setEditingCell(cellKey) }
+              : () => setEditingCell(cellKey)
+          }
           onClick={swapMode ? () => handleSwapClick(cellKey) : undefined}
-          onSave={(updates) => handleSave(day, period, updates)}
+          onSave={(updates) =>
+            swapMode ? handleWeeklySave(day, period, updates) : handleSave(day, period, updates)
+          }
           currentEntry={entry}
           period={period}
-          nextPeriod={nextPeriod}
+          // 이번주 편집은 칸 단위 기록이라 블록타임(다음 교시와 합치기)을 지원하지 않는다
+          nextPeriod={swapMode ? null : nextPeriod}
           isOverride={weeklyOverrides[cellKey] !== undefined}
           isToday={isToday}
         />
@@ -365,7 +400,7 @@ export default function Timetable() {
       </div>
       {swapMode && (
         <p className="text-[clamp(0.5rem,0.55vw,0.65rem)] text-gray-400 mb-2 shrink-0">
-          셀을 클릭해서 선택 → 다른 셀을 클릭하면 교환됩니다. 월요일에 초기화됩니다.
+          클릭 → 다른 셀 클릭: 교환 · 더블클릭: 이번주만 추가/수정 · 월요일에 초기화됩니다.
         </p>
       )}
       <div
