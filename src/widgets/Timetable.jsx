@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "../context/AuthContext"
 import { fetchTimetable, upsertTimetableEntry, deleteTimetableEntry } from "../api/timetable"
 import { fetchProfileRow, upsertProfileRow } from "../api/settings"
@@ -19,6 +19,14 @@ export default function Timetable() {
   const [highlightToday, setHighlightToday] = useState(true)
   const [swapMode, setSwapMode] = useState(false)
   const [selectedCell, setSelectedCell] = useState(null)
+  // 클릭(선택)이 셀을 움직여(scale) 더블클릭 판정을 깨므로, 클릭을 잠시 미뤄서
+  // 더블클릭인지 먼저 가린다. 지연 실행 시 stale state를 읽지 않도록 ref를 함께 둔다.
+  const selectedCellRef = useRef(null)
+  const pendingClickRef = useRef(null)
+  const selectCell = (v) => {
+    selectedCellRef.current = v
+    setSelectedCell(v)
+  }
   // 내 시간표(map)와 학급 시간표(classMap)의 이번주 교환 기록을 한 컬럼에 함께 저장한다.
   const [weeklyMaps, setWeeklyMaps] = useState({ map: {}, classMap: {} })
   const [tab, setTab] = useState("personal")
@@ -114,19 +122,20 @@ export default function Timetable() {
   }
 
   const handleSwapClick = async (cellKey) => {
-    if (!selectedCell) {
-      setSelectedCell(cellKey)
+    const selected = selectedCellRef.current
+    if (!selected) {
+      selectCell(cellKey)
       return
     }
-    if (selectedCell === cellKey) {
-      setSelectedCell(null)
+    if (selected === cellKey) {
+      selectCell(null)
       return
     }
 
-    const entryA = getEffectiveEntry(selectedCell)
+    const entryA = getEffectiveEntry(selected)
     const entryB = getEffectiveEntry(cellKey)
 
-    const [dayA, periodA] = selectedCell.split("-").map(Number)
+    const [dayA, periodA] = selected.split("-").map(Number)
     const [dayB, periodB] = cellKey.split("-").map(Number)
 
     const newMap = { ...weeklyOverrides }
@@ -143,23 +152,52 @@ export default function Timetable() {
     }
 
     if (entryB) {
-      newMap[selectedCell] = {
+      newMap[selected] = {
         ...entryB,
         day: dayA,
         start_period: periodA,
         end_period: periodA,
       }
     } else {
-      newMap[selectedCell] = null
+      newMap[selected] = null
     }
 
     await saveWeeklyOverrides(newMap)
-    setSelectedCell(null)
+    selectCell(null)
+  }
+
+  // 클릭을 잠깐 미뤄 더블클릭과 구분한다. 250ms 안에:
+  // - 같은 칸을 또 클릭(더블클릭 진행) → 미룬 클릭을 버리고 dblclick에 맡긴다
+  // - 다른 칸을 클릭(빠른 교환) → 미룬 클릭을 즉시 실행하고 새 클릭을 미룬다
+  const handleCellClick = (cellKey) => {
+    const pending = pendingClickRef.current
+    if (pending) {
+      clearTimeout(pending.timer)
+      pendingClickRef.current = null
+      if (pending.key === cellKey) return
+      handleSwapClick(pending.key)
+    }
+    pendingClickRef.current = {
+      key: cellKey,
+      timer: setTimeout(() => {
+        pendingClickRef.current = null
+        handleSwapClick(cellKey)
+      }, 250),
+    }
+  }
+
+  const handleCellDoubleClick = (cellKey) => {
+    if (pendingClickRef.current) {
+      clearTimeout(pendingClickRef.current.timer)
+      pendingClickRef.current = null
+    }
+    selectCell(null)
+    setEditingCell(cellKey)
   }
 
   const handleResetWeekly = async () => {
     await saveWeeklyOverrides({})
-    setSelectedCell(null)
+    selectCell(null)
   }
 
   // 이번주 편집에서 더블클릭으로 한 칸을 직접 고친다. 기본 시간표는 건드리지 않고
@@ -328,10 +366,10 @@ export default function Timetable() {
           swapMode={swapMode}
           onDoubleClick={
             swapMode
-              ? () => { setSelectedCell(null); setEditingCell(cellKey) }
+              ? () => handleCellDoubleClick(cellKey)
               : () => setEditingCell(cellKey)
           }
-          onClick={swapMode ? () => handleSwapClick(cellKey) : undefined}
+          onClick={swapMode ? () => handleCellClick(cellKey) : undefined}
           onSave={(updates) =>
             swapMode ? handleWeeklySave(day, period, updates) : handleSave(day, period, updates)
           }
@@ -353,7 +391,7 @@ export default function Timetable() {
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-baseline gap-3">
           <button
-            onClick={() => { setTab("personal"); setSwapMode(false); setSelectedCell(null) }}
+            onClick={() => { setTab("personal"); setSwapMode(false); selectCell(null) }}
             className={`text-[clamp(0.9rem,1vw,1.25rem)] font-semibold transition-colors ${
               tab === "personal" ? "text-gray-900" : "text-gray-300 hover:text-gray-500"
             }`}
@@ -362,7 +400,7 @@ export default function Timetable() {
           </button>
           {homeroomClass && (
             <button
-              onClick={() => { setTab("class"); setSwapMode(false); setSelectedCell(null) }}
+              onClick={() => { setTab("class"); setSwapMode(false); selectCell(null) }}
               className={`text-[clamp(0.8rem,0.9vw,1.1rem)] font-semibold transition-colors ${
                 tab === "class" ? "text-gray-900" : "text-gray-300 hover:text-gray-500"
               }`}
@@ -387,7 +425,7 @@ export default function Timetable() {
             </button>
           )}
           <button
-            onClick={() => { setSwapMode(!swapMode); setSelectedCell(null) }}
+            onClick={() => { setSwapMode(!swapMode); selectCell(null) }}
             className={`text-[clamp(0.5rem,0.6vw,0.7rem)] px-2 py-1 rounded-lg transition-colors ${
               swapMode
                 ? "bg-primary text-white"
