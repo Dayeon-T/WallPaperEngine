@@ -15,6 +15,7 @@ import {
 import { timeToMin, mergePeriodSchedule, getEnabledPeriods, findCurrentPeriod } from "../lib/periods"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
 import { fetchTimetableByUserId } from "../api/timetable"
+import BackButton from "../components/BackButton"
 
 const PRESET_MESSAGES = [
   "오늘도 파이팅!",
@@ -439,7 +440,10 @@ export default function Messages() {
           {/* 내 프로필 */}
           <div className="px-4 pt-4 pb-3 border-b border-gray-100 shrink-0">
             <div className="flex items-center justify-between mb-3">
-              <a href="/" className="text-lg font-black">PLANSCHOOL</a>
+              <div className="flex items-center gap-1">
+                <BackButton iconOnly className="-ml-1" />
+                <a href="/" className="text-lg font-black">PLANSCHOOL</a>
+              </div>
               <button
                 onClick={() => setShowNewChat(!showNewChat)}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition"

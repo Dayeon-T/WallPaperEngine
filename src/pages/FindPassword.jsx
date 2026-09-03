@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { resetPassword } from "../api/SignIn"
+import BackButton from "../components/BackButton"
 
 const floatingLabel =
   "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted transition-all peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs"
@@ -33,7 +34,8 @@ export default function FindPassword() {
 
   if (sent) {
     return (
-      <div className="flex h-full justify-center bg-white">
+      <div className="relative flex h-full justify-center bg-white">
+        <BackButton fallback="/signin" className="absolute left-5 top-5" />
         <div className="w-[30%]">
           <div className="flex justify-center">
             <h1 className="mt-10 mb-14 text-5xl font-black">
@@ -62,7 +64,8 @@ export default function FindPassword() {
   }
 
   return (
-    <div className="flex h-full justify-center bg-white">
+    <div className="relative flex h-full justify-center bg-white">
+      <BackButton fallback="/signin" className="absolute left-5 top-5" />
       <div className="w-[30%]">
         <div className="flex justify-center">
           <h1 className="mt-10 mb-20 text-5xl font-black">

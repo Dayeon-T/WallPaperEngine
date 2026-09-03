@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../lib/supabase"
 import { updatePassword } from "../api/settings"
+import BackButton from "../components/BackButton"
 
 const floatingLabel =
   "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted transition-all peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs"
@@ -40,7 +41,9 @@ function mapUpdateError(message) {
 
 function Frame({ children }) {
   return (
-    <div className="flex h-full justify-center bg-white">
+    <div className="relative flex h-full justify-center bg-white">
+      {/* 메일 링크로 새 탭에서 열리면 방문 기록이 없으므로 로그인으로 보냅니다 */}
+      <BackButton fallback="/signin" className="absolute left-5 top-5" />
       <div className="w-[30%]">
         <div className="flex justify-center">
           <h1 className="mt-10 mb-14 text-5xl font-black">

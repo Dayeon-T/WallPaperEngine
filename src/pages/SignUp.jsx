@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router"
 import { signUp } from "../api/SignIn"
+import BackButton from "../components/BackButton"
 import { EDUCATION_OFFICES, searchSchools } from "../api/neis"
 import { POLICY_VERSION, SIGNUP_CONSENT } from "../legal/policy"
 
@@ -22,7 +22,6 @@ const inputBase =
   "peer h-16 w-full border border-muted px-4 pt-4 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
 
 export default function SignUp() {
-  const navigate = useNavigate()
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -158,7 +157,8 @@ export default function SignUp() {
 
   if (submitted) {
     return (
-      <div className="flex h-full justify-center bg-white">
+      <div className="relative flex h-full justify-center bg-white">
+        <BackButton className="absolute left-5 top-5" />
         <div className="w-[30%]">
           <div className="flex justify-center">
             <h1 className="mt-10 mb-14 text-5xl font-black">
@@ -187,7 +187,8 @@ export default function SignUp() {
   }
 
   return (
-    <div className="flex h-full justify-center bg-white">
+    <div className="relative flex h-full justify-center bg-white">
+      <BackButton className="absolute left-5 top-5" />
       <div className="w-[30%]">
         <div className="flex justify-center">
           <h1 className="mt-10 mb-14 text-5xl font-black">

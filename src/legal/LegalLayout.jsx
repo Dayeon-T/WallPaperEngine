@@ -1,4 +1,5 @@
 import { EFFECTIVE_DATE, POLICY_VERSION } from "./policy"
+import BackButton from "../components/BackButton"
 
 /* 이용약관·개인정보처리방침 공용 껍데기.
    개인정보 보호법 제30조 제2항에 따라 정보주체가 쉽게 확인할 수 있어야 하므로
@@ -7,6 +8,7 @@ export default function LegalLayout({ title, children }) {
   return (
     <div className="h-full overflow-y-auto bg-white">
       <div className="mx-auto w-full max-w-3xl px-6 py-12">
+        <BackButton className="-ml-2 mb-4" />
         <a href="/" className="text-2xl font-black">PLANSCHOOL</a>
         <h1 className="mt-8 text-3xl font-bold">{title}</h1>
         <p className="mt-2 text-sm text-muted">

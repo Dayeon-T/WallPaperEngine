@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { signIn } from "../api/SignIn"
+import BackButton from "../components/BackButton"
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -26,7 +27,8 @@ export default function SignIn() {
   }
 
   return (
-    <div className="flex h-full justify-center bg-white">
+    <div className="relative flex h-full justify-center bg-white">
+      <BackButton className="absolute left-5 top-5" />
       <div className="w-[30%]">
         <div className="flex justify-center">
           <h1 className="mt-10 mb-20 text-5xl font-black">
