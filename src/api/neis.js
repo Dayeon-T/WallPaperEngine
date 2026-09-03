@@ -34,6 +34,19 @@ export function getDefaultQuickLinks(atptCode) {
   ]
 }
 
+// 학교 코드로 도로명 주소를 가져온다. (날씨 위젯의 위치 대체용)
+export async function fetchSchoolAddress(atptCode, schoolCode) {
+  if (!atptCode || !schoolCode) return ""
+
+  const url =
+    `https://open.neis.go.kr/hub/schoolInfo?KEY=${NEIS_KEY}&Type=json&pIndex=1&pSize=1` +
+    `&ATPT_OFCDC_SC_CODE=${atptCode}&SD_SCHUL_CODE=${schoolCode}`
+
+  const res = await fetch(url)
+  const data = await res.json()
+  return data.schoolInfo?.[1]?.row?.[0]?.ORG_RDNMA || ""
+}
+
 export async function searchSchools(atptCode, keyword) {
   if (!atptCode || !keyword || keyword.length < 2) return []
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useNavigate } from "react-router"
 import { useAuth } from "../context/AuthContext"
 import { EDUCATION_OFFICES, searchSchools, getDefaultQuickLinks } from "../api/neis"
 import {
@@ -13,6 +12,7 @@ import { signOut } from "../api/SignIn"
 import { fetchSchoolEvents, addSchoolEvent, deleteSchoolEvent } from "../api/schoolEvents"
 import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
+import BackButton from "../components/BackButton"
 
 import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
 
@@ -62,6 +62,15 @@ const SECTION_GROUPS = [
 ]
 
 const CHANGELOGS = [
+  {
+    date: "2026.09.03",
+    changes: [
+      "로그인·회원가입·아이디/비밀번호 찾기·쪽지함·약관 화면에 뒤로가기 버튼이 생겼어요.",
+      "날씨를 불러오지 못하면 '위치 허용하고 날씨 보기' 버튼으로 다시 시도할 수 있어요.",
+      "위치 권한이 없어도 학교 위치 기준 날씨를 보여드려요. 지역명 옆에 (학교 위치)로 표시돼요.",
+      "위치 권한을 나중에 허용하면 새로고침 없이 자동으로 내 위치 날씨로 바뀌어요.",
+    ],
+  },
   {
     date: "2026.08.28",
     changes: [
@@ -184,7 +193,6 @@ const btnPrimary =
 
 export default function Settings() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState("profile")
   const [msg, setMsg] = useState({ text: "", type: "" })
   const showMsg = (text, type = "success") => {
@@ -200,15 +208,7 @@ export default function Settings() {
       <div />
       <div className="col-span-3 flex bg-white rounded-2xl overflow-hidden">
       <nav className="w-52 shrink-0 border-r border-gray-100 p-6 flex flex-col gap-1 overflow-y-auto">
-        <button
-          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
-          className="mb-3 -ml-1 flex items-center gap-1 self-start rounded-lg px-2 py-1 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          뒤로가기
-        </button>
+        <BackButton className="mb-3 -ml-1 self-start" />
         <a href="/" className="text-xl font-black mb-8 block">PLANSCHOOL</a>
         {SECTION_GROUPS.map((group, gi) => (
           <div
