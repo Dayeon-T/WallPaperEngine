@@ -187,7 +187,12 @@ export default function ToDo() {
     await load()
   }
 
+  // 한글 조합 중(마지막 글자 밑줄 상태)에 Enter를 누르면 keydown이 조합 확정보다
+  // 먼저 처리되어 마지막 글자가 두 번 들어간다("재료비비"). 조합이 끝난 뒤에만 처리한다.
+  const isComposing = (e) => e.nativeEvent.isComposing || e.keyCode === 229
+
   const handleEditKeyDown = (e) => {
+    if (isComposing(e)) return
     if (e.key === "Enter") handleEditSave()
     if (e.key === "Escape") {
       setEditId(null)
@@ -196,6 +201,7 @@ export default function ToDo() {
   }
 
   const handleKeyDown = (e) => {
+    if (isComposing(e)) return
     if (e.key === "Enter") handleAdd()
   }
 

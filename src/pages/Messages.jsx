@@ -838,6 +838,8 @@ export default function Messages() {
                     value={inputMsg}
                     onChange={(e) => setInputMsg(e.target.value)}
                     onKeyDown={(e) => {
+                      // 한글 조합 중 Enter는 무시 (마지막 글자 중복 방지)
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault()
                         handleSend()

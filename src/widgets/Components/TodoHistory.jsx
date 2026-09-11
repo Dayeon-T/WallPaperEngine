@@ -35,6 +35,8 @@ export default function TodoHistory({ onClose }) {
   }
 
   const handleKeyDown = (e) => {
+    // 한글 조합 중 Enter는 무시 (마지막 글자 중복 방지)
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === "Enter") handleSearch()
   }
 
