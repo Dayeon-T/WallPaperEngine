@@ -114,3 +114,22 @@ html, body, #root {
   box-sizing: border-box;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
+
+/* ── 바탕화면(Lively 등) 환경은 마우스 휠을 전달하지 않아 스크롤바를 직접 잡아 끌어야 한다.
+      쪽지함처럼 스크롤이 필수인 영역은 스크롤바를 항상 보이고 잡기 쉽게 키운다. ── */
+.scroll-visible::-webkit-scrollbar {
+  width: 14px;
+}
+.scroll-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-visible::-webkit-scrollbar-thumb {
+  background-color: #c4c4c4;
+  border-radius: 999px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-visible::-webkit-scrollbar-thumb:hover,
+.scroll-visible::-webkit-scrollbar-thumb:active {
+  background-color: #9a9a9a;
+}

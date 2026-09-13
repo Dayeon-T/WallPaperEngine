@@ -119,6 +119,9 @@ export default function Messages() {
   const [lightbox, setLightbox] = useState(null) // 크게 보는 사진 URL
   const [dragOver, setDragOver] = useState(false)
   const chatEndRef = useRef(null)
+  const msgListRef = useRef(null)
+  const holdScrollRef = useRef({ timer: null, raf: null })
+  const [scrollInfo, setScrollInfo] = useState({ canScroll: false, atTop: true, atBottom: true })
   const fileInputRef = useRef(null)
   const imageInputRef = useRef(null)
 
@@ -266,6 +269,81 @@ export default function Messages() {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [lightbox])
+
+  /* ── 메시지 영역 스크롤 보조 ──
+     Lively 같은 바탕화면 프로그램은 마우스 휠을 웹 페이지에 전달하지 않는다.
+     클릭·마우스 이동·키보드는 전달되므로 그것만으로 스크롤할 수 있게
+     (1) 스크롤바를 항상 보이고 (2) 누르고 있으면 계속 내려가는 ▲▼ 버튼과
+     (3) PageUp/PageDown 키를 붙인다. 메시지 클릭이나 입력 동작은 바꾸지 않는다. */
+  const updateScrollInfo = useCallback(() => {
+    const el = msgListRef.current
+    if (!el) return
+    const canScroll = el.scrollHeight > el.clientHeight + 4
+    const atTop = el.scrollTop <= 2
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2
+    setScrollInfo((prev) =>
+      prev.canScroll === canScroll && prev.atTop === atTop && prev.atBottom === atBottom
+        ? prev
+        : { canScroll, atTop, atBottom }
+    )
+  }, [])
+
+  // 메시지 수가 바뀌거나 창 크기가 바뀌면 스크롤 가능 여부를 다시 잰다
+  useEffect(() => {
+    const el = msgListRef.current
+    if (!el) return
+    updateScrollInfo()
+    const ro = new ResizeObserver(updateScrollInfo)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [messages, selectedId, updateScrollInfo])
+
+  const scrollMessagesBy = useCallback((amount, smooth = true) => {
+    const el = msgListRef.current
+    if (!el) return
+    el.scrollBy({ top: amount, behavior: smooth ? "smooth" : "auto" })
+  }, [])
+
+  const stopHoldScroll = useCallback(() => {
+    const h = holdScrollRef.current
+    if (h.timer) clearTimeout(h.timer)
+    if (h.raf) cancelAnimationFrame(h.raf)
+    h.timer = null
+    h.raf = null
+  }, [])
+
+  // ▲▼ 버튼: 한 번 누르면 한 칸, 누르고 있으면 계속 이동
+  const startHoldScroll = useCallback((dir) => {
+    stopHoldScroll()
+    const el = msgListRef.current
+    if (!el) return
+    scrollMessagesBy(dir * Math.max(120, el.clientHeight * 0.5))
+    holdScrollRef.current.timer = setTimeout(() => {
+      const step = () => {
+        el.scrollTop += dir * 10
+        holdScrollRef.current.raf = requestAnimationFrame(step)
+      }
+      holdScrollRef.current.raf = requestAnimationFrame(step)
+    }, 350)
+  }, [scrollMessagesBy, stopHoldScroll])
+
+  useEffect(() => stopHoldScroll, [stopHoldScroll])
+
+  // 입력창에 커서가 없을 때도 PageUp/PageDown 으로 메시지를 넘길 수 있게
+  useEffect(() => {
+    if (!selectedId) return
+    const onKey = (e) => {
+      if (e.key !== "PageUp" && e.key !== "PageDown") return
+      const tag = document.activeElement?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA") return // 입력창은 아래 onKeyDown이 처리
+      const el = msgListRef.current
+      if (!el) return
+      e.preventDefault()
+      scrollMessagesBy((e.key === "PageUp" ? -1 : 1) * el.clientHeight * 0.8)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [selectedId, scrollMessagesBy])
 
   // 대화 선택 시 메시지 로드
   const openConversation = useCallback(async (partnerId, partnerName) => {
@@ -631,7 +709,7 @@ export default function Messages() {
           </div>
 
           {/* 대화 목록 or 새 대화 */}
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0 scroll-visible">
             {showNewChat ? (
               <div>
                 <p className="px-4 py-2 text-xs font-semibold text-gray-400">새 대화 시작</p>
@@ -812,7 +890,12 @@ export default function Messages() {
               </div>
 
               {/* 메시지 영역 */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-1 min-h-0 bg-gray-50/50">
+              <div className="relative flex-1 min-h-0 flex flex-col">
+              <div
+                ref={msgListRef}
+                onScroll={updateScrollInfo}
+                className="flex-1 overflow-y-auto p-6 space-y-1 min-h-0 bg-gray-50/50 scroll-visible"
+              >
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <p className="text-sm">첫 메시지를 보내보세요!</p>
@@ -922,6 +1005,33 @@ export default function Messages() {
                 )}
                 <div ref={chatEndRef} />
               </div>
+              {/* 스크롤 버튼 (휠이 안 되는 바탕화면 환경용). 눌러서 한 칸, 누르고 있으면 계속 */}
+              {scrollInfo.canScroll && (
+                <div className="absolute right-6 bottom-3 flex flex-col gap-1.5 z-10">
+                  {[
+                    { dir: -1, label: "위로", disabled: scrollInfo.atTop, path: "M18 15l-6-6-6 6" },
+                    { dir: 1, label: "아래로", disabled: scrollInfo.atBottom, path: "M6 9l6 6 6-6" },
+                  ].map((b) => (
+                    <button
+                      key={b.dir}
+                      type="button"
+                      title={`${b.label} (PageUp/PageDown 키도 됩니다)`}
+                      disabled={b.disabled}
+                      onPointerDown={(e) => { e.preventDefault(); startHoldScroll(b.dir) }}
+                      onPointerUp={stopHoldScroll}
+                      onPointerLeave={stopHoldScroll}
+                      onPointerCancel={stopHoldScroll}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-sm text-gray-500 flex items-center justify-center hover:bg-white hover:text-primary hover:border-primary/40 transition disabled:opacity-30 disabled:cursor-default select-none"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d={b.path} />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              )}
+              </div>
 
               {/* 입력 영역 */}
               <div className="shrink-0 px-4 py-3 border-t border-gray-100 bg-white">
@@ -1003,6 +1113,13 @@ export default function Messages() {
                       }
                     }}
                     onKeyDown={(e) => {
+                      // 입력 중에도 PageUp/PageDown 으로 메시지를 넘긴다 (휠이 안 되는 바탕화면 환경용)
+                      if (e.key === "PageUp" || e.key === "PageDown") {
+                        e.preventDefault()
+                        const el = msgListRef.current
+                        if (el) scrollMessagesBy((e.key === "PageUp" ? -1 : 1) * el.clientHeight * 0.8)
+                        return
+                      }
                       // 한글 조합 중 Enter는 무시 (마지막 글자 중복 방지)
                       if (e.nativeEvent.isComposing || e.keyCode === 229) return
                       if (e.key === "Enter" && !e.shiftKey) {
