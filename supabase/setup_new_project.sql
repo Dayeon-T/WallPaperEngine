@@ -185,10 +185,21 @@ create table if not exists public.cheers (
   from_id uuid not null references auth.users(id) on delete cascade,
   from_name text,
   to_id uuid not null references auth.users(id) on delete cascade,
-  message text not null,
+  message text default '',
+  image_url text,
   is_read boolean default false,
   created_at timestamptz default now()
 );
+
+-- 이미 만들어진 테이블에도 사진 컬럼을 채워 넣고, 사진만 보내는 쪽지를 허용합니다.
+alter table public.cheers add column if not exists image_url text;
+alter table public.cheers alter column message drop not null;
+alter table public.cheers alter column message set default '';
+
+-- 글도 사진도 없는 빈 쪽지는 막습니다.
+alter table public.cheers drop constraint if exists cheers_has_content;
+alter table public.cheers add constraint cheers_has_content
+  check (coalesce(message, '') <> '' or image_url is not null) not valid;
 
 alter table public.cheers enable row level security;
 
@@ -525,5 +536,36 @@ create policy "본인 아바타 삭제"
   on storage.objects for delete to authenticated
   using (
     bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+
+-- ─────────────────── 쪽지 사진 저장소 ───────────────────
+-- 파일 경로는 "{보낸 사람 id}/{랜덤 uuid}.확장자" 입니다.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('cheer-images', 'cheer-images', true, 10485760, array['image/*'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "쪽지 사진 조회" on storage.objects;
+create policy "쪽지 사진 조회"
+  on storage.objects for select
+  using (bucket_id = 'cheer-images');
+
+drop policy if exists "본인 폴더에 쪽지 사진 업로드" on storage.objects;
+create policy "본인 폴더에 쪽지 사진 업로드"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'cheer-images'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "본인 쪽지 사진 삭제" on storage.objects;
+create policy "본인 쪽지 사진 삭제"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'cheer-images'
     and (storage.foldername(name))[1] = auth.uid()::text
   );

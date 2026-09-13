@@ -1,11 +1,81 @@
 import { supabase } from "../lib/supabase"
 
-export async function sendCheer(fromId, fromName, toId, message) {
+export async function sendCheer(fromId, fromName, toId, message, imageUrl = null) {
   const { error } = await supabase
     .from("cheers")
-    .insert({ from_id: fromId, from_name: fromName, to_id: toId, message })
+    .insert({
+      from_id: fromId,
+      from_name: fromName,
+      to_id: toId,
+      message: message || "",
+      image_url: imageUrl || null,
+    })
 
   return { error }
+}
+
+/* ───── 쪽지 사진 ───── */
+
+export const CHEER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+const CHEER_IMAGE_MAX_EDGE = 1600
+// svg는 스크립트를 품을 수 있어 받지 않습니다.
+const CHEER_IMAGE_EXT = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+}
+
+export function validateCheerImage(file) {
+  if (!file) return "사진을 선택해주세요."
+  if (!CHEER_IMAGE_EXT[file.type]) return "jpg, png, gif, webp 사진만 보낼 수 있어요."
+  if (file.size > CHEER_IMAGE_MAX_BYTES) return "10MB 이하의 사진만 보낼 수 있어요."
+  return null
+}
+
+/* 휴대폰 사진은 한 장에 수 MB라 저장 용량을 금방 채웁니다.
+   긴 변이 1600px을 넘거나 1.5MB보다 크면 올리기 전에 브라우저에서 줄입니다. */
+async function shrinkCheerImage(file) {
+  if (file.type === "image/gif") return file // 움짤은 줄이면 멈춰버린다
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
+    const { width, height } = bitmap
+    const scale = Math.min(1, CHEER_IMAGE_MAX_EDGE / Math.max(width, height))
+    if (scale === 1 && file.size <= 1.5 * 1024 * 1024) {
+      bitmap.close()
+      return file
+    }
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.max(1, Math.round(width * scale))
+    canvas.height = Math.max(1, Math.round(height * scale))
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+    // png는 투명 배경을 지키고, 나머지는 jpeg로 압축한다
+    const type = file.type === "image/png" ? "image/png" : "image/jpeg"
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, 0.85))
+    if (!blob || blob.size >= file.size) return file
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + "." + CHEER_IMAGE_EXT[type], { type })
+  } catch {
+    return file
+  }
+}
+
+/* 사진을 올리고 공개 URL을 돌려줍니다. 경로는 "{보낸 사람 id}/{랜덤 uuid}.확장자". */
+export async function uploadCheerImage(userId, file) {
+  const invalid = validateCheerImage(file)
+  if (invalid) return { error: new Error(invalid) }
+
+  const upload = await shrinkCheerImage(file)
+  const path = `${userId}/${crypto.randomUUID()}.${CHEER_IMAGE_EXT[upload.type] || "jpg"}`
+
+  const { error } = await supabase.storage
+    .from("cheer-images")
+    .upload(path, upload, { contentType: upload.type, cacheControl: "31536000" })
+
+  if (error) return { error }
+
+  const { data } = supabase.storage.from("cheer-images").getPublicUrl(path)
+  return { data: data.publicUrl, error: null }
 }
 
 export async function fetchInbox(userId) {

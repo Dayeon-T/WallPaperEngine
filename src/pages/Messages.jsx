@@ -11,6 +11,8 @@ import {
   addFriendByCode,
   removeFriend,
   fetchFriends,
+  uploadCheerImage,
+  validateCheerImage,
 } from "../api/cheers"
 import { timeToMin, mergePeriodSchedule, getEnabledPeriods, findCurrentPeriod } from "../lib/periods"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
@@ -112,8 +114,13 @@ export default function Messages() {
   const [codeCopied, setCodeCopied] = useState(false)
   const [statusMap, setStatusMap] = useState({})
   const [selectedStatus, setSelectedStatus] = useState(null)
+  const [pendingImage, setPendingImage] = useState(null) // { file, preview }
+  const [sendError, setSendError] = useState("")
+  const [lightbox, setLightbox] = useState(null) // 크게 보는 사진 URL
+  const [dragOver, setDragOver] = useState(false)
   const chatEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const imageInputRef = useRef(null)
 
   // 내 프로필 로드 (아바타 + 친구코드)
   useEffect(() => {
@@ -245,6 +252,21 @@ export default function Messages() {
     return unsub
   }, [user, selectedId, loadConversations])
 
+  const clearPendingImage = useCallback(() => {
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.preview)
+      return null
+    })
+  }, [])
+
+  // 크게 보기는 Esc로 닫는다
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e) => e.key === "Escape" && setLightbox(null)
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [lightbox])
+
   // 대화 선택 시 메시지 로드
   const openConversation = useCallback(async (partnerId, partnerName) => {
     if (!user) return
@@ -268,6 +290,8 @@ export default function Messages() {
     }
     setSelectedStatus(statusMap[partnerId] || null)
     setShowNewChat(false)
+    clearPendingImage()
+    setSendError("")
     // 상대 시간표 상태 로드 (그 사람의 교시 시간 설정까지 반영)
     Promise.all([fetchTimetableByUserId(partnerId), fetchProfileRow(partnerId)])
       .then(([{ data: tt }, { data: prof }]) => {
@@ -289,27 +313,62 @@ export default function Messages() {
     setConversations((prev) =>
       prev.map((c) => c.partnerId === partnerId ? { ...c, unread: 0 } : c)
     )
-  }, [user, avatarMap])
+  }, [user, avatarMap, clearPendingImage])
 
   // 스크롤 맨 아래
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // 메시지 보내기
+  // 첨부할 사진 고르기 (파일 선택 / 붙여넣기 / 드래그)
+  const selectImage = (file) => {
+    if (!file) return
+    const invalid = validateCheerImage(file)
+    if (invalid) {
+      setSendError(invalid)
+      return
+    }
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.preview)
+      return { file, preview: URL.createObjectURL(file) }
+    })
+    setSendError("")
+  }
+
+  // 메시지 보내기 (text가 있으면 빠른 메시지 — 첨부 사진은 같이 보내지 않음)
   const handleSend = async (text) => {
-    const finalMsg = text || inputMsg.trim()
-    if (!finalMsg || !selectedId) return
+    const finalMsg = (text ?? inputMsg).trim()
+    const image = text ? null : pendingImage
+    if ((!finalMsg && !image) || !selectedId || sending) return
     setSending(true)
+    setSendError("")
+
+    let imageUrl = null
+    if (image) {
+      const { data, error } = await uploadCheerImage(user.id, image.file)
+      if (error) {
+        setSendError(error.message || "사진을 올리지 못했어요.")
+        setSending(false)
+        return
+      }
+      imageUrl = data
+    }
+
     const fromName = user.user_metadata?.name || "익명"
-    await sendCheer(user.id, fromName, selectedId, finalMsg)
+    const { error } = await sendCheer(user.id, fromName, selectedId, finalMsg, imageUrl)
+    if (error) {
+      setSendError(error.message || "쪽지를 보내지 못했어요.")
+      setSending(false)
+      return
+    }
     // 로컬에 즉시 반영
     const now = new Date().toISOString()
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), from_id: user.id, from_name: fromName, to_id: selectedId, message: finalMsg, created_at: now, is_read: false },
+      { id: crypto.randomUUID(), from_id: user.id, from_name: fromName, to_id: selectedId, message: finalMsg, image_url: imageUrl, created_at: now, is_read: false },
     ])
-    setInputMsg("")
+    if (!text) setInputMsg("")
+    if (image) clearPendingImage()
     setSending(false)
     loadConversations()
   }
@@ -679,7 +738,8 @@ export default function Messages() {
                       )}
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="text-xs text-gray-400 truncate pr-2">
-                          {isMine ? "나: " : ""}{lastMsg.message}
+                          {isMine ? "나: " : ""}
+                          {lastMsg.image_url ? `📷 ${lastMsg.message || "사진"}` : lastMsg.message}
                         </p>
                         {c.unread > 0 && (
                           <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center px-1">
@@ -695,8 +755,31 @@ export default function Messages() {
           </div>
         </div>
 
-        {/* 오른쪽: 채팅 영역 */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* 오른쪽: 채팅 영역 (사진을 끌어다 놓으면 첨부됩니다) */}
+        <div
+          className="relative flex-1 flex flex-col min-w-0"
+          onDragOver={(e) => {
+            if (!selectedId || sending) return
+            if ([...(e.dataTransfer?.types || [])].includes("Files")) {
+              e.preventDefault()
+              setDragOver(true)
+            }
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false)
+          }}
+          onDrop={(e) => {
+            if (!selectedId) return
+            e.preventDefault()
+            setDragOver(false)
+            selectImage(e.dataTransfer?.files?.[0])
+          }}
+        >
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-3 z-20 rounded-2xl border-2 border-dashed border-primary/60 bg-white/70 flex items-center justify-center text-sm font-semibold text-primary">
+              여기에 놓으면 사진이 첨부됩니다
+            </div>
+          )}
           {!selectedId ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-gray-200 mb-3">
@@ -760,6 +843,13 @@ export default function Messages() {
                       getDateKey(m.created_at) !== getDateKey(nextMsg.created_at) ||
                       fmtTime(m.created_at) !== fmtTime(nextMsg.created_at)
 
+                    const isLast = i === messages.length - 1
+                    const bubbleCls = `px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                      isMine
+                        ? "bg-primary text-white rounded-2xl rounded-br-sm"
+                        : "bg-white text-gray-800 rounded-2xl rounded-bl-sm shadow-sm"
+                    }`
+
                     return (
                       <div key={m.id}>
                         {showDate && (
@@ -783,13 +873,28 @@ export default function Messages() {
                               <span className="text-xs text-gray-500 mb-1 ml-1">{m.from_name}</span>
                             )}
                             <div className={`flex items-end gap-1.5 ${isMine ? "flex-row-reverse" : ""}`}>
-                              <div className={`px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                                isMine
-                                  ? "bg-primary text-white rounded-2xl rounded-br-sm"
-                                  : "bg-white text-gray-800 rounded-2xl rounded-bl-sm shadow-sm"
-                              }`}>
-                                {m.message}
-                              </div>
+                              {m.image_url ? (
+                                <div className={`flex flex-col gap-1 ${isMine ? "items-end" : "items-start"}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLightbox(m.image_url)}
+                                    className="block rounded-2xl overflow-hidden bg-gray-200/60 shadow-sm hover:opacity-95 transition"
+                                    title="크게 보기"
+                                  >
+                                    <img
+                                      src={m.image_url}
+                                      alt="사진"
+                                      loading="lazy"
+                                      className="block max-w-[240px] max-h-[240px] w-auto h-auto"
+                                      // 마지막 사진이 뒤늦게 뜨면 스크롤이 위에 걸려 있으므로 다시 내려준다
+                                      onLoad={() => isLast && chatEndRef.current?.scrollIntoView()}
+                                    />
+                                  </button>
+                                  {m.message && <div className={bubbleCls}>{m.message}</div>}
+                                </div>
+                              ) : (
+                                <div className={bubbleCls}>{m.message}</div>
+                              )}
                               <div className="flex flex-col items-end gap-0.5 shrink-0 pb-0.5">
                                 {isMine && !m.is_read && (
                                   <span className="text-[10px] font-bold text-primary leading-none">1</span>
@@ -833,10 +938,70 @@ export default function Messages() {
                     </button>
                   ))}
                 </div>
+                {/* 첨부 사진 미리보기 */}
+                {pendingImage && (
+                  <div className="mb-2 flex items-start">
+                    <div className="relative">
+                      <img
+                        src={pendingImage.preview}
+                        alt="첨부할 사진"
+                        className="block h-20 max-w-[200px] w-auto rounded-lg border border-gray-200 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearPendingImage}
+                        disabled={sending}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white text-xs leading-none flex items-center justify-center shadow hover:bg-red-500 transition disabled:opacity-40"
+                        title="첨부 취소"
+                      >
+                        ×
+                      </button>
+                      {sending && (
+                        <div className="absolute inset-0 rounded-lg bg-white/60 flex items-center justify-center text-[11px] text-gray-600">
+                          올리는 중...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {sendError && (
+                  <p className="text-[11px] text-red-500 mb-1.5">{sendError}</p>
+                )}
                 <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={sending}
+                    className="w-10 h-10 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-primary flex items-center justify-center transition disabled:opacity-40 shrink-0"
+                    title="사진 보내기"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                  </button>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      selectImage(e.target.files?.[0])
+                      e.target.value = "" // 같은 파일을 다시 골라도 onChange가 뜨도록
+                    }}
+                  />
                   <textarea
                     value={inputMsg}
                     onChange={(e) => setInputMsg(e.target.value)}
+                    onPaste={(e) => {
+                      // 캡처한 이미지를 붙여넣으면 바로 첨부
+                      const item = [...(e.clipboardData?.items || [])].find((it) => it.type.startsWith("image/"))
+                      if (item) {
+                        e.preventDefault()
+                        selectImage(item.getAsFile())
+                      }
+                    }}
                     onKeyDown={(e) => {
                       // 한글 조합 중 Enter는 무시 (마지막 글자 중복 방지)
                       if (e.nativeEvent.isComposing || e.keyCode === 229) return
@@ -845,7 +1010,7 @@ export default function Messages() {
                         handleSend()
                       }
                     }}
-                    placeholder="메시지를 입력하세요..."
+                    placeholder={pendingImage ? "사진과 함께 보낼 말 (선택)" : "메시지를 입력하세요..."}
                     maxLength={200}
                     rows={1}
                     className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary max-h-24"
@@ -853,12 +1018,17 @@ export default function Messages() {
                   />
                   <button
                     onClick={() => handleSend()}
-                    disabled={!inputMsg.trim() || sending}
+                    disabled={(!inputMsg.trim() && !pendingImage) || sending}
                     className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center hover:opacity-90 transition disabled:opacity-40 shrink-0"
+                    title="보내기"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
+                    {sending ? (
+                      <span className="text-xs">...</span>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                      </svg>
+                    )}
                   </button>
                 </div>
               </div>
@@ -866,6 +1036,39 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      {/* 사진 크게 보기 */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-6"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={lightbox}
+            alt="사진 크게 보기"
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="absolute top-4 right-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <a
+              href={lightbox}
+              target="_blank"
+              rel="noreferrer"
+              className="h-9 px-3 rounded-lg bg-white/15 text-white text-xs font-semibold flex items-center hover:bg-white/25 transition"
+            >
+              원본 열기
+            </a>
+            <button
+              type="button"
+              onClick={() => setLightbox(null)}
+              className="w-9 h-9 rounded-lg bg-white/15 text-white text-lg leading-none flex items-center justify-center hover:bg-white/25 transition"
+              title="닫기 (Esc)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
