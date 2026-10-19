@@ -14,7 +14,7 @@ import {
   uploadCheerImage,
   validateCheerImage,
 } from "../api/cheers"
-import { timeToMin, mergePeriodSchedule, getEnabledPeriods, findCurrentPeriod } from "../lib/periods"
+import { timeToMin, mergePeriodSchedule, getEnabledPeriods, findCurrentPeriod, entryCoversPeriod } from "../lib/periods"
 import { fetchProfileRow, uploadAvatar } from "../api/settings"
 import { fetchTimetableByUserId } from "../api/timetable"
 import BackButton from "../components/BackButton"
@@ -68,7 +68,7 @@ function getNowStatus(entries, periodSchedule) {
   if (!slot) {
     const next = enabled.find((p) => timeToMin(p.start) > current)
     if (next) {
-      const nextEntry = todayEntries.find((e) => next.index >= e.start_period && next.index <= e.end_period)
+      const nextEntry = todayEntries.find((e) => entryCoversPeriod(e, next.index))
       if (nextEntry && nextEntry.subject) {
         return { text: `쉬는 시간 → ${nextEntry.subject} ${next.label}`, emoji: "☕" }
       }
@@ -82,7 +82,7 @@ function getNowStatus(entries, periodSchedule) {
   }
 
   // 수업 중인지 공강인지 - 과목명 + 교시 표시
-  const entry = todayEntries.find((e) => slot.index >= e.start_period && slot.index <= e.end_period)
+  const entry = todayEntries.find((e) => entryCoversPeriod(e, slot.index))
   if (entry && entry.subject) {
     return { text: `${entry.subject} ${slot.label}`, emoji: "📚" }
   }

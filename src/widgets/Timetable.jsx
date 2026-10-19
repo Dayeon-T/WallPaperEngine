@@ -5,6 +5,7 @@ import { fetchProfileRow, upsertProfileRow } from "../api/settings"
 import TimeBlock from "./Components/TimeBlock"
 import {
   DEFAULT_PERIOD_SCHEDULE, getMondayStr, mergePeriodSchedule, getWeeklyOverrides,
+  orderPeriods, entryCoversPeriod, LUNCH_INDEX,
 } from "../lib/periods"
 
 const DAY_LABELS = ["", "월", "화", "수", "목", "금"]
@@ -71,7 +72,8 @@ export default function Timetable() {
   for (const entry of entries) {
     baseEntryMap[`${entry.day}-${entry.start_period}`] = entry
     for (let p = entry.start_period; p <= entry.end_period; p++) {
-      baseCellMap[`${entry.day}-${p}`] = entry
+      // 점심 칸은 블록 범위에 끼어 있어도 건너뛴다 (점심 위치가 바뀌어도 블록이 깨지지 않게)
+      if (entryCoversPeriod(entry, p)) baseCellMap[`${entry.day}-${p}`] = entry
     }
   }
 
@@ -295,11 +297,12 @@ export default function Timetable() {
 
   const todayDayIndex = new Date().getDay()
 
-  const visiblePeriods = periods
-    .map((p, i) => ({ ...p, originalIndex: i + 1 }))
+  // 점심시간 위치(설정의 after)가 반영된 화면 순서. originalIndex가 교시 번호.
+  const visiblePeriods = orderPeriods([null, ...periods])
     .filter((p) => p.enabled)
+    .map((p) => ({ ...p, originalIndex: p.index }))
 
-  const lunchOriginalIdx = periods.findIndex((p) => p.label === "점심시간") + 1
+  const lunchOriginalIdx = LUNCH_INDEX
   const totalRows = visiblePeriods.length + 1
 
   const cells = []
@@ -352,7 +355,11 @@ export default function Timetable() {
       const isEditing = editingCell === cellKey
       const isSelected = swapMode && selectedCell === cellKey
       // 블록타임은 '다음 교시'가 아니라 '화면에 보이는 다음 교시'와 묶어야 한다.
-      const nextPeriod = visiblePeriods[row]?.originalIndex ?? null
+      // 점심 줄은 건너뛴다 — 점심 바로 앞 교시에서 블록을 만들면 점심 너머 교시와 묶인다.
+      // 점심 줄 자체에서는 블록을 만들지 않는다.
+      const nextPeriod = period === LUNCH_INDEX
+        ? null
+        : visiblePeriods.slice(row).find((vp2) => vp2.originalIndex !== LUNCH_INDEX)?.originalIndex ?? null
 
       cells.push(
         <TimeBlock

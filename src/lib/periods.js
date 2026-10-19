@@ -22,6 +22,30 @@ export const DEFAULT_WORK_END_TIME = "16:00"
 // 이 번호부터를 방과후로 취급한다 (석식 라벨·퇴근 시각 연장 기준).
 export const AFTERSCHOOL_START = 9
 
+// 점심시간의 배열 자리는 항상 5번이다. 시간표 entry가 교시 번호(배열 인덱스)를
+// 가리키므로 점심 위치를 옮겨도 번호는 그대로 두고, "몇 교시 뒤에 오는지(after)"만
+// 점심 항목에 따로 기억한다. 화면 순서는 orderPeriods()가 그 값으로 만든다.
+export const LUNCH_INDEX = 5
+export const DEFAULT_LUNCH_AFTER = 4
+export const LUNCH_AFTER_MIN = 1
+export const LUNCH_AFTER_MAX = 7
+
+export function normalizeLunchAfter(value) {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < LUNCH_AFTER_MIN || n > LUNCH_AFTER_MAX) return DEFAULT_LUNCH_AFTER
+  return n
+}
+
+// schedule은 [null, 1교시, ...] 형태
+export function getLunchAfter(schedule) {
+  return normalizeLunchAfter(schedule[LUNCH_INDEX]?.after)
+}
+
+// 교시 번호(1~7교시, 점심 제외) → 배열 인덱스. 5교시부터는 점심 자리만큼 하나 밀린다.
+export function periodNoToIndex(n) {
+  return n < LUNCH_INDEX ? n : n + 1
+}
+
 export function timeToMin(str) {
   const [h, m] = str.split(":").map(Number)
   return h * 60 + m
@@ -50,16 +74,41 @@ export function mergePeriodSchedule(saved) {
       start: base[i]?.start || def.start,
       end: base[i]?.end || def.end,
       enabled: base[i]?.enabled ?? def.enabled,
+      // 점심 항목만 위치(after)를 가진다
+      ...(i + 1 === LUNCH_INDEX ? { after: normalizeLunchAfter(base[i]?.after) } : {}),
     })),
   ]
 }
 
-// 교시 번호(index)는 유지한 채 활성 교시만 남긴다.
+// 화면에 보이는 순서대로 늘어놓는다. 교시 번호(index)는 유지하고 null 자리는 뺀다.
+// 점심시간은 after로 지정한 교시 바로 뒤에 끼운다.
+export function orderPeriods(schedule) {
+  const list = schedule.map((p, i) => (p ? { ...p, index: i } : null)).filter(Boolean)
+  const lunch = list.find((p) => p.index === LUNCH_INDEX)
+  const rest = list.filter((p) => p.index !== LUNCH_INDEX)
+  if (!lunch) return rest
+  const afterIndex = periodNoToIndex(getLunchAfter(schedule))
+  const pos = rest.findIndex((p) => p.index === afterIndex)
+  rest.splice(pos + 1, 0, lunch)
+  return rest
+}
+
+// 교시 번호(index)는 유지한 채 활성 교시만 화면 순서대로 남긴다.
 // entry의 start_period/end_period가 원래 교시 번호 기준이기 때문이다.
 export function getEnabledPeriods(schedule) {
-  return schedule
-    .map((p, i) => (p ? { ...p, index: i } : null))
-    .filter((p) => p && p.enabled !== false)
+  return orderPeriods(schedule).filter((p) => p.enabled !== false)
+}
+
+// entry(start_period~end_period 범위)가 해당 교시를 덮는지.
+// 점심 칸(5)은 번호 범위 안에 끼어 있어도 건너뛴다. 4~5교시 블록(4..6)이
+// 점심을 삼키면 점심 위치를 옮겼을 때 엉뚱한 줄에 그려지기 때문이다.
+// entry가 점심 칸에서 시작하거나 끝나는 경우에만 점심을 포함한다.
+export function entryCoversPeriod(entry, periodIndex) {
+  if (periodIndex < entry.start_period || periodIndex > entry.end_period) return false
+  if (periodIndex === LUNCH_INDEX) {
+    return entry.start_period === LUNCH_INDEX || entry.end_period === LUNCH_INDEX
+  }
+  return true
 }
 
 // 현재 시각(분)이 속한 교시 슬롯을 반환. 없으면 null.
@@ -101,9 +150,5 @@ export function getWeeklyOverrides(wt) {
 export function resolveEntry(todayEntries, overrides, dayIndex, periodIndex) {
   const key = `${dayIndex}-${periodIndex}`
   if (overrides && overrides[key] !== undefined) return overrides[key]
-  return (
-    todayEntries.find(
-      (e) => periodIndex >= e.start_period && periodIndex <= e.end_period
-    ) || null
-  )
+  return todayEntries.find((e) => entryCoversPeriod(e, periodIndex)) || null
 }

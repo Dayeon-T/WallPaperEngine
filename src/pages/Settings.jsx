@@ -14,7 +14,10 @@ import { fetchWeeklyCompleted } from "../api/todos"
 import DateDropdown from "../widgets/Components/DateDropdown"
 import BackButton from "../components/BackButton"
 
-import { DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule } from "../lib/periods"
+import {
+  DEFAULT_PERIOD_SCHEDULE, DEFAULT_WORK_END_TIME, mergePeriodSchedule, orderPeriods,
+  LUNCH_INDEX, LUNCH_AFTER_MIN, LUNCH_AFTER_MAX, normalizeLunchAfter, periodNoToIndex, timeToMin,
+} from "../lib/periods"
 
 
 const BG_PRESETS = [
@@ -554,6 +557,11 @@ function PasswordSection({ showMsg }) {
 }
 
 /* ───────── 섹션 3: 교시 시간 설정 ───────── */
+function minToTime(min) {
+  const m = Math.max(0, Math.min(min, 23 * 60 + 59))
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`
+}
+
 function PeriodSection({ user, showMsg }) {
   const [schedule, setSchedule] = useState(() =>
     DEFAULT_PERIOD_SCHEDULE.slice(1).map((p) => ({ ...p }))
@@ -576,6 +584,38 @@ function PeriodSection({ user, showMsg }) {
   const updateField = (index, field, value) => {
     setSchedule((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)))
   }
+
+  // 점심시간을 한 교시 위/아래로 옮긴다. 교시 번호는 그대로이고 점심의 after 값만 바뀐다.
+  // 자리를 맞바꾸는 교시와 시각도 함께 바꿔, 옮긴 뒤에도 시간 순서가 그대로 이어지게 한다.
+  const lunchAfter = normalizeLunchAfter(schedule[LUNCH_INDEX - 1]?.after)
+  const moveLunch = (delta) => {
+    const next = Math.min(LUNCH_AFTER_MAX, Math.max(LUNCH_AFTER_MIN, lunchAfter + delta))
+    if (next === lunchAfter) return
+    setSchedule((prev) => {
+      const lunchI = LUNCH_INDEX - 1
+      // 위로 가면 바로 앞 교시(lunchAfter)와, 아래로 가면 바로 뒤 교시(next)와 자리를 바꾼다
+      const otherI = periodNoToIndex(delta < 0 ? lunchAfter : next) - 1
+      const [firstI, secondI] = delta < 0 ? [otherI, lunchI] : [lunchI, otherI]
+      const first = prev[firstI]
+      const second = prev[secondI]
+      const dur = (p) => Math.max(0, timeToMin(p.end) - timeToMin(p.start))
+      const gap = Math.max(0, timeToMin(second.start) - timeToMin(first.end))
+      // 먼저 오던 칸의 시작 시각부터, 순서만 바꿔 같은 길이·같은 간격으로 다시 채운다
+      const secondStart = timeToMin(first.start)
+      const secondEnd = secondStart + dur(second)
+      const firstStart = secondEnd + gap
+      const firstEnd = firstStart + dur(first)
+      return prev.map((p, i) => {
+        if (i === lunchI) p = { ...p, after: next }
+        if (i === secondI) return { ...p, start: minToTime(secondStart), end: minToTime(secondEnd) }
+        if (i === firstI) return { ...p, start: minToTime(firstStart), end: minToTime(firstEnd) }
+        return p
+      })
+    })
+  }
+
+  // 화면에는 점심 위치가 반영된 순서로 보여준다. p.index가 교시 번호(1부터).
+  const orderedSchedule = orderPeriods([null, ...schedule])
 
   const handleSave = async () => {
     setSaving(true)
@@ -606,8 +646,11 @@ function PeriodSection({ user, showMsg }) {
           <span className="font-semibold text-gray-500">교시</span>
           <span className="font-semibold text-gray-500 text-center">시작</span>
           <span className="font-semibold text-gray-500 text-center">종료</span>
-          {schedule.map((p, i) => (
-            <div key={i} className="contents">
+          {orderedSchedule.map((p) => {
+            const i = p.index - 1 // schedule 배열(0부터)의 자리
+            const isLunch = p.index === LUNCH_INDEX
+            return (
+            <div key={p.index} className="contents">
               <input
                 type="checkbox"
                 checked={p.enabled}
@@ -622,9 +665,37 @@ function PeriodSection({ user, showMsg }) {
                   className={`h-10 rounded-lg border border-gray-200 px-3 text-sm font-medium outline-none focus:border-primary ${!p.enabled ? "opacity-40" : ""}`}
                   value={p.label}
                   disabled={!p.enabled}
-                  placeholder={DEFAULT_PERIOD_SCHEDULE[i + 1].label}
+                  placeholder={DEFAULT_PERIOD_SCHEDULE[p.index].label}
                   onChange={(e) => updateField(i, "label", e.target.value)}
                 />
+              ) : isLunch ? (
+                // 점심시간은 화살표로 위치를 옮길 수 있다 (3교시 뒤, 4교시 뒤, 5교시 뒤 ...)
+                <span className={`flex items-center gap-2 font-medium ${!p.enabled ? "text-gray-300" : ""}`}>
+                  {p.label}
+                  <span className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      title="한 교시 위로"
+                      aria-label="점심시간을 한 교시 위로"
+                      disabled={lunchAfter <= LUNCH_AFTER_MIN}
+                      onClick={() => moveLunch(-1)}
+                      className="w-7 h-7 rounded-md border border-gray-200 text-xs text-gray-600 transition hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      title="한 교시 아래로"
+                      aria-label="점심시간을 한 교시 아래로"
+                      disabled={lunchAfter >= LUNCH_AFTER_MAX}
+                      onClick={() => moveLunch(1)}
+                      className="w-7 h-7 rounded-md border border-gray-200 text-xs text-gray-600 transition hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      ▼
+                    </button>
+                  </span>
+                  <span className="text-xs font-normal text-gray-400">{lunchAfter}교시 뒤</span>
+                </span>
               ) : (
                 <span className={`font-medium ${!p.enabled ? "text-gray-300" : ""}`}>{p.label}</span>
               )}
@@ -643,8 +714,12 @@ function PeriodSection({ user, showMsg }) {
                 onChange={(e) => updateField(i, "end", e.target.value)}
               />
             </div>
-          ))}
+            )
+          })}
         </div>
+        <p className="mt-3 text-xs text-gray-400">
+          점심시간 옆의 ▲▼ 버튼으로 점심을 몇 교시 뒤에 둘지 바꿀 수 있어요. 자리를 바꾼 교시의 시각은 자동으로 이어지니 저장 전에 한 번 확인해 주세요.
+        </p>
         <div className="mt-8 border-t pt-6">
           <p className="text-base font-semibold mb-1">기본 퇴근 시각</p>
           <p className="text-sm text-gray-400 mb-4">
