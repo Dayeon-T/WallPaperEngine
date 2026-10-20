@@ -653,7 +653,9 @@ function PeriodSection({ user, showMsg }) {
   return (
     <div>
       <h2 className="text-xl font-bold mb-6">교시 시간 설정</h2>
-      <div className="max-w-xl">
+      {/* 넓은 화면에서는 교시표 오른쪽에 부가 설정을 두어 세로 스크롤을 줄인다 */}
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+      <div className="max-w-xl flex-1">
         <div className="grid grid-cols-[auto_1fr_auto_auto] gap-x-3 gap-y-2 items-center text-sm">
           <span />
           <span className="font-semibold text-gray-500">교시</span>
@@ -733,7 +735,22 @@ function PeriodSection({ user, showMsg }) {
         <p className="mt-3 text-xs text-gray-400">
           점심시간 옆의 ▲▼ 버튼으로 점심을 몇 교시 뒤에 둘지 바꿀 수 있어요. 자리를 바꾼 교시의 시각은 자동으로 이어지니 저장 전에 한 번 확인해 주세요.
         </p>
-        <div className="mt-8 border-t pt-6">
+
+        <div className="flex gap-3 mt-6">
+          <button className={btnPrimary} disabled={saving} onClick={handleSave}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+          <button
+            className="rounded-lg border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+            onClick={handleReset}
+          >
+            기본값으로 초기화
+          </button>
+        </div>
+      </div>
+
+      <aside className="flex flex-col gap-8 lg:w-72 lg:shrink-0 lg:border-l lg:pl-8">
+        <div>
           <p className="text-base font-semibold mb-1">블록타임 합쳐 보기</p>
           <p className="text-sm text-gray-400 mb-4">
             같은 수업이 이어지는 칸을 시간표에서 하나로 합쳐 보여줍니다. 끄면 교시마다 따로 표시되며,
@@ -748,11 +765,12 @@ function PeriodSection({ user, showMsg }) {
             />
           </button>
         </div>
-        <div className="mt-8 border-t pt-6">
+        <div className="border-t pt-6">
           <p className="text-base font-semibold mb-1">기본 퇴근 시각</p>
           <p className="text-sm text-gray-400 mb-4">
             '지금 이 시각' 위젯의 &quot;퇴근까지 ○시간 남았어요&quot; 계산 기준입니다.
             방과후 수업이 있는 날은 그 수업이 끝나는 시각까지 자동으로 늘어납니다.
+            교시 시간의 저장 버튼으로 함께 저장됩니다.
           </p>
           <input
             type="time"
@@ -761,18 +779,7 @@ function PeriodSection({ user, showMsg }) {
             onChange={(e) => setWorkEndTime(e.target.value)}
           />
         </div>
-
-        <div className="flex gap-3 mt-6">
-          <button className={btnPrimary} disabled={saving} onClick={handleSave}>
-            {saving ? "저장 중..." : "저장"}
-          </button>
-          <button
-            className="rounded-lg border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-            onClick={handleReset}
-          >
-            기본값으로 초기화
-          </button>
-        </div>
+      </aside>
       </div>
     </div>
   )
