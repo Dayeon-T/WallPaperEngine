@@ -22,8 +22,9 @@ export default function TimeBlock({
   onClick,
   onSave,
   currentEntry,
-  period,
   nextPeriod = null,
+  // 다음 칸에 이미 같은 수업이 있는지. 블록타임 체크의 초기값이 된다.
+  nextIsSame = false,
   isOverride = false,
 }) {
   const [subject, setSubject] = useState(label || "")
@@ -41,7 +42,7 @@ export default function TimeBlock({
       setSubject(currentEntry?.subject || "")
       setRoom(currentEntry?.room || "")
       setColor(currentEntry?.color || bg || "#EBEBEB")
-      setMergeNext(currentEntry ? currentEntry.end_period > currentEntry.start_period : false)
+      setMergeNext(!!nextPeriod && nextIsSame)
       setTimeout(() => inputRef.current?.focus(), 0)
     }
   }, [isEditing])
@@ -74,14 +75,9 @@ export default function TimeBlock({
     return () => window.removeEventListener("resize", place)
   }, [isEditing])
 
-  // 저장할 end_period. 예전에는 화면 행 번호(row)를 폴백으로 썼는데, 설정에서 교시를
-  // 끄면 행 번호와 교시 번호가 어긋나 end_period < start_period가 되고
-  // DB의 period_order 제약에 걸려 저장이 조용히 실패했다.
-  const computeEndPeriod = () => {
-    const start = currentEntry?.start_period ?? period
-    if (!mergeNext || !nextPeriod) return start
-    return Math.max(start, nextPeriod)
-  }
+  // 저장은 칸마다 따로 한다. 블록타임 체크는 "다음 칸에도 같은 값을 쓴다"는 뜻이고,
+  // 어느 칸에 쓸지는 부모(Timetable)가 정한다.
+  const buildResult = () => ({ subject, room, color, mergeNext: !!nextPeriod && mergeNext })
 
   useEffect(() => {
     if (!isEditing) return
@@ -90,12 +86,7 @@ export default function TimeBlock({
       const insideCell = ref.current?.contains(e.target)
       const insidePopup = popupRef.current?.contains(e.target)
       if (!insideCell && !insidePopup) {
-        onSave?.({
-          subject,
-          room,
-          color,
-          end_period: computeEndPeriod(),
-        })
+        onSave?.(buildResult())
       }
     }
     const timer = setTimeout(() => {
@@ -216,7 +207,7 @@ export default function TimeBlock({
           )}
           <button
             className="w-full rounded-lg bg-primary text-white text-xs font-semibold py-2 transition hover:opacity-90"
-            onClick={() => onSave?.({ subject, room, color, end_period: computeEndPeriod() })}
+            onClick={() => onSave?.(buildResult())}
           >
             확인
           </button>

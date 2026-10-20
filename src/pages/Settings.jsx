@@ -1874,6 +1874,7 @@ function SchoolEventsSection({ user, showMsg }) {
 function LayoutSection({ user, showMsg }) {
   const [mode, setMode] = useState("horizontal")
   const [todayHighlight, setTodayHighlight] = useState(true)
+  const [blockView, setBlockView] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -1882,6 +1883,7 @@ function LayoutSection({ user, showMsg }) {
       const { data } = await fetchProfileRow(user.id)
       if (data?.layout_mode) setMode(data.layout_mode)
       if (data?.today_highlight === false) setTodayHighlight(false)
+      if (data?.timetable_block_view === false) setBlockView(false)
       setLoaded(true)
     })()
   }, [user.id])
@@ -1903,6 +1905,16 @@ function LayoutSection({ user, showMsg }) {
     if (error) { showMsg(error.message, "error"); return }
     window.dispatchEvent(new CustomEvent("today-highlight-change", { detail: next }))
     showMsg(next ? "오늘 하이라이트를 켰습니다." : "오늘 하이라이트를 껐습니다.")
+  }
+
+  // 표시만 바뀐다. 시간표는 교시마다 따로 저장되어 있어서 끄면 칸마다 하나씩 보인다.
+  const handleBlockViewToggle = async () => {
+    const next = !blockView
+    setBlockView(next)
+    const { error } = await upsertProfileRow(user.id, { timetable_block_view: next })
+    if (error) { showMsg(error.message, "error"); return }
+    window.dispatchEvent(new CustomEvent("timetable-block-view-change", { detail: next }))
+    showMsg(next ? "블록타임을 합쳐서 보여줍니다." : "블록타임을 칸마다 따로 보여줍니다.")
   }
 
   if (!loaded) return <p className="text-sm text-gray-400">불러오는 중...</p>
@@ -1993,6 +2005,21 @@ function LayoutSection({ user, showMsg }) {
         >
           <span
             className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${todayHighlight ? "translate-x-5" : ""}`}
+          />
+        </button>
+      </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="text-base font-semibold mb-1">시간표 블록타임 합쳐 보기</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          같은 수업이 이어지는 칸을 하나로 합쳐 보여줍니다. 끄면 교시마다 따로 표시되며, 저장된 시간표는 바뀌지 않습니다.
+        </p>
+        <button
+          onClick={handleBlockViewToggle}
+          className={`relative w-12 h-7 rounded-full transition-colors ${blockView ? "bg-primary" : "bg-gray-300"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${blockView ? "translate-x-5" : ""}`}
           />
         </button>
       </div>

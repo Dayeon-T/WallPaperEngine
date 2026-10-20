@@ -111,6 +111,43 @@ export function entryCoversPeriod(entry, periodIndex) {
   return true
 }
 
+// 시간표 row는 교시당 한 칸(start_period === end_period)으로 저장한다.
+// 예전 버전은 블록타임을 한 row의 범위(start~end)로 저장했으므로, 읽을 때
+// 교시별 칸으로 펼쳐 모든 화면이 같은 모양의 데이터를 보게 한다.
+// 같은 교시에 이미 자기 row가 있으면 그 row가 우선한다 (예전 화면 규칙과 같다).
+export function expandEntries(entries) {
+  if (!Array.isArray(entries)) return []
+  const own = new Set(entries.map((e) => `${e.day}-${e.start_period}-${e.is_class ? 1 : 0}`))
+  const out = []
+  for (const e of entries) {
+    out.push(e.end_period === e.start_period ? e : { ...e, end_period: e.start_period })
+    for (let p = e.start_period + 1; p <= e.end_period; p++) {
+      if (!entryCoversPeriod(e, p)) continue
+      if (own.has(`${e.day}-${p}-${e.is_class ? 1 : 0}`)) continue
+      const { id: _id, created_at: _c, ...rest } = e
+      out.push({ ...rest, start_period: p, end_period: p })
+    }
+  }
+  return out
+}
+
+// 범위로 저장된 예전 row가 남아 있는지
+export function hasRangeEntries(entries) {
+  return Array.isArray(entries) && entries.some((e) => e.end_period > e.start_period)
+}
+
+// 두 칸이 블록타임으로 묶여 보일 만큼 같은 수업인지.
+// 저장은 칸마다 따로 하고, 화면에서만 같은 수업이 이어지면 하나로 그린다.
+export function isSameLesson(a, b) {
+  if (!a || !b) return false
+  if (!a.subject || !b.subject) return false
+  return (
+    a.subject === b.subject &&
+    (a.room || "") === (b.room || "") &&
+    (a.color || "") === (b.color || "")
+  )
+}
+
 // 현재 시각(분)이 속한 교시 슬롯을 반환. 없으면 null.
 export function findCurrentPeriod(enabledPeriods, currentMin) {
   return (

@@ -37,6 +37,7 @@ create table if not exists public.profiles (
   layout_mode text,                              -- 'horizontal' | 'vertical'
   schedule_view_mode text default 'week',        -- 'week' | 'month'
   today_highlight boolean default true,
+  timetable_block_view boolean default true,     -- 시간표에서 이어지는 같은 수업을 합쳐 보일지
   work_end_time text default '16:00',            -- 기본 퇴근 시각 (HH:MM)
 
   -- 동의 기록 (개인정보 보호법 제15조·제22조)

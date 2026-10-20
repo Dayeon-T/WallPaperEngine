@@ -1,23 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "../context/AuthContext"
-import { fetchTimetable, upsertTimetableEntry, deleteTimetableEntry } from "../api/timetable"
+import {
+  fetchTimetable, upsertTimetableEntries, deleteTimetableEntries,
+} from "../api/timetable"
 import { fetchProfileRow, upsertProfileRow } from "../api/settings"
 import TimeBlock from "./Components/TimeBlock"
 import {
   DEFAULT_PERIOD_SCHEDULE, getMondayStr, mergePeriodSchedule, getWeeklyOverrides,
-  orderPeriods, entryCoversPeriod, LUNCH_INDEX,
+  orderPeriods, isSameLesson, LUNCH_INDEX,
 } from "../lib/periods"
 
 const DAY_LABELS = ["", "월", "화", "수", "목", "금"]
 // 이 위젯의 periods 배열은 0부터 시작한다 (교시 번호 = index + 1)
 const DEFAULT_PERIODS = DEFAULT_PERIOD_SCHEDULE.slice(1).map((p) => ({ ...p }))
 
+// 시간표는 교시당 한 칸으로 저장한다. 블록타임은 같은 수업을 두 칸에 쓰는 것이고,
+// 화면에서 이어 붙여 보일지는 '블록타임 합쳐 보기'(blockView) 설정이 정한다.
+// 그래서 블록으로 넣었든 하나씩 넣었든 저장된 값은 같다.
 export default function Timetable() {
   const { user } = useAuth()
   const [entries, setEntries] = useState([])
   const [editingCell, setEditingCell] = useState(null)
   const [periods, setPeriods] = useState(DEFAULT_PERIODS)
   const [highlightToday, setHighlightToday] = useState(true)
+  const [blockView, setBlockView] = useState(true)
   const [swapMode, setSwapMode] = useState(false)
   const [selectedCell, setSelectedCell] = useState(null)
   // 클릭(선택)이 셀을 움직여(scale) 더블클릭 판정을 깨므로, 클릭을 잠시 미뤄서
@@ -42,9 +48,21 @@ export default function Timetable() {
       fetchTimetable(user.id, isClass),
       fetchProfileRow(user.id),
     ])
-    if (ttResult.data) setEntries(ttResult.data)
+    if (ttResult.data) {
+      let rows = ttResult.data
+      // 예전 버전이 블록타임을 한 row의 범위(start~end)로 저장해 둔 경우,
+      // 교시별 row로 다시 써서 앞으로는 모든 칸이 자기 row를 갖게 한다.
+      if (ttResult.needsMigration) {
+        const { data: migrated, error } = await upsertTimetableEntries(
+          rows.map((e) => ({ ...e, user_id: user.id, is_class: isClass }))
+        )
+        if (!error && migrated) rows = migrated
+      }
+      setEntries(rows)
+    }
     if (profileResult.data) {
       if (profileResult.data.today_highlight === false) setHighlightToday(false)
+      if (profileResult.data.timetable_block_view === false) setBlockView(false)
       setHomeroomClass(profileResult.data.homeroom_class || null)
       setPeriods(mergePeriodSchedule(profileResult.data.period_schedule).slice(1))
       const wt = getWeeklyOverrides(profileResult.data.weekly_timetable)
@@ -62,19 +80,20 @@ export default function Timetable() {
   }, [loadTimetable])
 
   useEffect(() => {
-    const handler = (e) => setHighlightToday(e.detail)
-    window.addEventListener("today-highlight-change", handler)
-    return () => window.removeEventListener("today-highlight-change", handler)
+    const onHighlight = (e) => setHighlightToday(e.detail)
+    const onBlockView = (e) => setBlockView(e.detail)
+    window.addEventListener("today-highlight-change", onHighlight)
+    window.addEventListener("timetable-block-view-change", onBlockView)
+    return () => {
+      window.removeEventListener("today-highlight-change", onHighlight)
+      window.removeEventListener("timetable-block-view-change", onBlockView)
+    }
   }, [])
 
-  const baseEntryMap = {}
+  // 칸 키("요일-교시") → 기본 시간표 row. row는 교시당 하나뿐이다.
   const baseCellMap = {}
   for (const entry of entries) {
-    baseEntryMap[`${entry.day}-${entry.start_period}`] = entry
-    for (let p = entry.start_period; p <= entry.end_period; p++) {
-      // 점심 칸은 블록 범위에 끼어 있어도 건너뛴다 (점심 위치가 바뀌어도 블록이 깨지지 않게)
-      if (entryCoversPeriod(entry, p)) baseCellMap[`${entry.day}-${p}`] = entry
-    }
+    baseCellMap[`${entry.day}-${entry.start_period}`] = entry
   }
 
   const getEffectiveEntry = (cellKey) => {
@@ -84,30 +103,25 @@ export default function Timetable() {
     return baseCellMap[cellKey] || null
   }
 
-  const getCellEntry = (day, period) => {
-    const cellKey = `${day}-${period}`
-    const entry = getEffectiveEntry(cellKey)
-    if (!entry) return null
-    return { ...entry, day, start_period: period, end_period: period }
-  }
+  // 점심시간 위치(설정의 after)가 반영된 화면 순서. originalIndex가 교시 번호.
+  const visiblePeriods = orderPeriods([null, ...periods])
+    .filter((p) => p.enabled)
+    .map((p) => ({ ...p, originalIndex: p.index }))
 
-  const getGroupKey = (day, period) => {
-    const cellKey = `${day}-${period}`
-    const entry = getEffectiveEntry(cellKey)
-    if (!entry) return ""
-    if (weeklyOverrides[cellKey] !== undefined) return `override-${cellKey}`
-    return entry.id || `base-${entry.day}-${entry.start_period}`
+  // 화면상 이웃한 두 줄이 하나의 블록으로 그려질지. 저장 값은 건드리지 않고
+  // 같은 수업이 이어지면 합쳐 보이기만 한다. 점심 줄은 다른 줄과 합치지 않는다.
+  const mergeRows = (day, rowA, rowB) => {
+    if (!blockView || swapMode) return false
+    const a = visiblePeriods[rowA]?.originalIndex
+    const b = visiblePeriods[rowB]?.originalIndex
+    if (!a || !b || a === LUNCH_INDEX || b === LUNCH_INDEX) return false
+    return isSameLesson(getEffectiveEntry(`${day}-${a}`), getEffectiveEntry(`${day}-${b}`))
   }
 
   const getSpan = (day, rowIndex) => {
-    const period = visiblePeriods[rowIndex].originalIndex
-    const groupKey = getGroupKey(day, period)
-    if (!groupKey) return 1
-
     let span = 1
-    for (let i = rowIndex + 1; i < visiblePeriods.length; i++) {
-      const nextPeriod = visiblePeriods[i].originalIndex
-      if (getGroupKey(day, nextPeriod) !== groupKey) break
+    for (let i = rowIndex; i + 1 < visiblePeriods.length; i++) {
+      if (!mergeRows(day, i, i + 1)) break
       span += 1
     }
     return span
@@ -202,26 +216,38 @@ export default function Timetable() {
     selectCell(null)
   }
 
-  // 이번주 편집에서 더블클릭으로 한 칸을 직접 고친다. 기본 시간표는 건드리지 않고
+  // 편집 팝업의 결과를 "어느 칸에 무엇을 쓸지"로 푼다.
+  // - 블록타임 체크: 이 칸과 다음 칸에 같은 값을 쓴다 (비우기도 두 칸 모두)
+  // - 원래 블록이었는데 체크를 풀면: 이 칸만 고치고 다음 칸은 비운다
+  // - 그 외: 이 칸만
+  const resolveTargets = (period, nextPeriod, nextWasSame, updates) => {
+    const value = updates.subject
+      ? { subject: updates.subject, room: updates.room || "", color: updates.color || "#EBEBEB" }
+      : null
+    const targets = [{ period, value }]
+    if (nextPeriod && updates.mergeNext) {
+      targets.push({ period: nextPeriod, value })
+    } else if (nextPeriod && nextWasSame) {
+      targets.push({ period: nextPeriod, value: null })
+    }
+    return targets
+  }
+
+  // 이번주 편집에서 더블클릭으로 칸을 직접 고친다. 기본 시간표는 건드리지 않고
   // 이번주 교환 기록에만 쓰므로 월요일이 되면 원래대로 돌아온다.
-  const handleWeeklySave = async (day, period, updates) => {
-    const cellKey = `${day}-${period}`
+  const handleWeeklySave = async (day, period, nextPeriod, nextWasSame, updates) => {
     try {
       const newMap = { ...weeklyOverrides }
-      if (!updates.subject) {
-        if (baseCellMap[cellKey]) {
-          newMap[cellKey] = null    // 기본 시간표가 있는 칸: 이번주만 비운다
+      for (const { period: p, value } of resolveTargets(period, nextPeriod, nextWasSame, updates)) {
+        const cellKey = `${day}-${p}`
+        if (!value) {
+          if (baseCellMap[cellKey]) {
+            newMap[cellKey] = null    // 기본 시간표가 있는 칸: 이번주만 비운다
+          } else {
+            delete newMap[cellKey]    // 원래도 빈 칸: 이번주 기록 자체를 지운다
+          }
         } else {
-          delete newMap[cellKey]    // 원래도 빈 칸: 이번주 기록 자체를 지운다
-        }
-      } else {
-        newMap[cellKey] = {
-          subject: updates.subject,
-          room: updates.room || "",
-          color: updates.color || "#EBEBEB",
-          day,
-          start_period: period,
-          end_period: period,
+          newMap[cellKey] = { ...value, day, start_period: p, end_period: p }
         }
       }
       await saveWeeklyOverrides(newMap)
@@ -233,9 +259,8 @@ export default function Timetable() {
   // 직접 고친 칸은 '이번주 교환' 기록보다 우선한다.
   // 교환으로 비운 칸(null 오버라이드)이 남아 있으면 새로 입력한 과목이 저장은 되고도
   // 화면에는 계속 빈 칸으로 보인다.
-  const clearWeeklyOverridesFor = async (day, startPeriod, endPeriod) => {
-    const keys = []
-    for (let p = startPeriod; p <= endPeriod; p++) keys.push(`${day}-${p}`)
+  const clearWeeklyOverridesFor = async (day, periodList) => {
+    const keys = periodList.map((p) => `${day}-${p}`)
     if (!keys.some((k) => k in weeklyOverrides)) return
 
     const next = { ...weeklyOverrides }
@@ -243,51 +268,40 @@ export default function Timetable() {
     await saveWeeklyOverrides(next)
   }
 
-  const handleSave = async (day, period, updates) => {
+  const handleSave = async (day, period, nextPeriod, nextWasSame, updates) => {
     if (!user) { setEditingCell(null); return }
-    const existing = baseEntryMap[`${day}-${period}`]
 
     try {
-      if (!updates.subject && !existing) {
-        // 기본 시간표엔 없지만 교환으로 채워진 칸이라면, 그 기록을 지워 빈 칸으로 되돌린다.
-        await clearWeeklyOverridesFor(day, period, period)
-        return
+      const targets = resolveTargets(period, nextPeriod, nextWasSame, updates)
+      const toUpsert = []
+      const toDelete = []
+      for (const { period: p, value } of targets) {
+        const existing = baseCellMap[`${day}-${p}`]
+        if (value) {
+          toUpsert.push({ ...value, user_id: user.id, day, start_period: p, is_class: tab === "class" })
+        } else if (existing?.id) {
+          toDelete.push(existing.id)
+        }
       }
 
-      if (!updates.subject && existing) {
-        const { error } = await deleteTimetableEntry(existing.id)
+      if (toUpsert.length > 0) {
+        const { error } = await upsertTimetableEntries(toUpsert)
+        if (error) {
+          alert("시간표를 저장하지 못했습니다: " + error.message)
+          return
+        }
+      }
+      if (toDelete.length > 0) {
+        const { error } = await deleteTimetableEntries(toDelete)
         if (error) {
           alert("시간표를 지우지 못했습니다: " + error.message)
           return
         }
-        // 프로필을 먼저 정리해야 뒤이은 loadTimetable이 옛 값을 다시 읽어오지 않는다.
-        await clearWeeklyOverridesFor(day, existing.start_period, existing.end_period)
-        await loadTimetable()
-        window.dispatchEvent(new Event("timetable-change"))
-        return
       }
 
-      const entry = {
-        user_id: user.id,
-        day,
-        start_period: period,
-        end_period: updates.end_period ?? existing?.end_period ?? period,
-        subject: updates.subject ?? "",
-        room: updates.room ?? existing?.room ?? "",
-        color: updates.color ?? existing?.color ?? "#EBEBEB",
-        is_class: tab === "class",
-      }
-      if (existing?.id) entry.id = existing.id
-
-      const { error } = await upsertTimetableEntry(entry)
-      if (error) {
-        alert("시간표를 저장하지 못했습니다: " + error.message)
-        return
-      }
-
-      // 블록타임을 한 칸으로 줄인 경우까지 감안해 예전 범위도 함께 정리한다.
-      const clearUntil = Math.max(entry.end_period, existing?.end_period ?? entry.end_period)
-      await clearWeeklyOverridesFor(day, entry.start_period, clearUntil)
+      // 프로필을 먼저 정리해야 뒤이은 loadTimetable이 옛 값을 다시 읽어오지 않는다.
+      // 기본 시간표엔 없지만 교환으로 채워진 칸을 비운 경우도 여기서 빈 칸으로 돌아간다.
+      await clearWeeklyOverridesFor(day, targets.map((t) => t.period))
       await loadTimetable()
       window.dispatchEvent(new Event("timetable-change"))
     } finally {
@@ -296,11 +310,6 @@ export default function Timetable() {
   }
 
   const todayDayIndex = new Date().getDay()
-
-  // 점심시간 위치(설정의 after)가 반영된 화면 순서. originalIndex가 교시 번호.
-  const visiblePeriods = orderPeriods([null, ...periods])
-    .filter((p) => p.enabled)
-    .map((p) => ({ ...p, originalIndex: p.index }))
 
   const lunchOriginalIdx = LUNCH_INDEX
   const totalRows = visiblePeriods.length + 1
@@ -342,16 +351,13 @@ export default function Timetable() {
 
       const day = col
       const cellKey = `${day}-${period}`
+      const rowIndex = row - 1
 
-      if (!swapMode) {
-        const prevPeriod = visiblePeriods[row - 2]?.originalIndex
-        if (prevPeriod && getGroupKey(day, prevPeriod) && getGroupKey(day, prevPeriod) === getGroupKey(day, period)) {
-          continue
-        }
-      }
+      // 윗줄과 합쳐 그려지는 칸은 윗줄 칸이 span으로 덮는다.
+      if (rowIndex > 0 && mergeRows(day, rowIndex - 1, rowIndex)) continue
 
-      const entry = swapMode ? getCellEntry(day, period) : getEffectiveEntry(cellKey)
-      const span = !swapMode && entry ? getSpan(day, row - 1) : 1
+      const entry = getEffectiveEntry(cellKey)
+      const span = entry ? getSpan(day, rowIndex) : 1
       const isEditing = editingCell === cellKey
       const isSelected = swapMode && selectedCell === cellKey
       // 블록타임은 '다음 교시'가 아니라 '화면에 보이는 다음 교시'와 묶어야 한다.
@@ -360,6 +366,14 @@ export default function Timetable() {
       const nextPeriod = period === LUNCH_INDEX
         ? null
         : visiblePeriods.slice(row).find((vp2) => vp2.originalIndex !== LUNCH_INDEX)?.originalIndex ?? null
+      // 다음 칸에 이미 같은 수업이 들어 있으면 팝업의 블록타임 체크를 켠 채로 연다.
+      const nextWasSame = nextPeriod
+        ? isSameLesson(entry, getEffectiveEntry(`${day}-${nextPeriod}`))
+        : false
+      // 합쳐 그린 칸 중 하나라도 이번주만 바뀐 칸이면 표시를 남긴다.
+      const isOverride = Array.from({ length: span }, (_, i) =>
+        `${day}-${visiblePeriods[rowIndex + i].originalIndex}`
+      ).some((k) => weeklyOverrides[k] !== undefined)
 
       cells.push(
         <TimeBlock
@@ -378,13 +392,14 @@ export default function Timetable() {
           }
           onClick={swapMode ? () => handleCellClick(cellKey) : undefined}
           onSave={(updates) =>
-            swapMode ? handleWeeklySave(day, period, updates) : handleSave(day, period, updates)
+            swapMode
+              ? handleWeeklySave(day, period, nextPeriod, nextWasSame, updates)
+              : handleSave(day, period, nextPeriod, nextWasSame, updates)
           }
           currentEntry={entry}
-          period={period}
-          // 이번주 편집은 칸 단위 기록이라 블록타임(다음 교시와 합치기)을 지원하지 않는다
-          nextPeriod={swapMode ? null : nextPeriod}
-          isOverride={weeklyOverrides[cellKey] !== undefined}
+          nextPeriod={nextPeriod}
+          nextIsSame={nextWasSame}
+          isOverride={isOverride}
           isToday={isToday}
         />
       )
